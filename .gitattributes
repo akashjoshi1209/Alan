@@ -1,0 +1,5 @@
+*.jar filter=lfs diff=lfs merge=lfs -text
+*.zip filter=lfs diff=lfs merge=lfs -text
+*.apk filter=lfs diff=lfs merge=lfs -text
+*.aar filter=lfs diff=lfs merge=lfs -text
+gradle/wrapper/dists/** filter=lfs diff=lfs merge=lfs -text
