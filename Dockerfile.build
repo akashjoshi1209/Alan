@@ -1,0 +1,43 @@
+# ARM64 builder using x86_64 emulation via qemu
+FROM --platform=linux/amd64 ubuntu:24.04
+
+# Install dependencies
+RUN apt-get update && apt-get install -y \
+    openjdk-17-jdk-headless \
+    wget \
+    unzip \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set up Android SDK
+ENV ANDROID_SDK_ROOT=/opt/android-sdk
+RUN mkdir -p ${ANDROID_SDK_ROOT}/cmdline-tools && \
+    cd ${ANDROID_SDK_ROOT}/cmdline-tools && \
+    wget -q https://dl.google.com/android/repository/commandlinetools-linux-10406996_latest.zip -O tools.zip && \
+    unzip -q tools.zip && \
+    mv cmdline-tools latest && \
+    rm tools.zip
+
+ENV PATH=${PATH}:${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin:${ANDROID_SDK_ROOT}/platform-tools:${ANDROID_SDK_ROOT}/build-tools/35.0.0
+
+# Accept licenses and install SDK
+RUN yes | sdkmanager --licenses && \
+    sdkmanager "platform-tools" "platforms;android-34" "build-tools;35.0.0"
+
+# Set up Gradle
+ENV GRADLE_VERSION=8.6
+RUN wget -q https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip -O /tmp/gradle.zip && \
+    unzip -q /tmp/gradle.zip -d /opt && \
+    rm /tmp/gradle.zip && \
+    ln -s /opt/gradle-${GRADLE_VERSION}/bin/gradle /usr/local/bin/gradle
+
+WORKDIR /app
+
+# Copy project
+COPY . .
+
+# Build
+RUN gradle assembleDebug --no-daemon
+
+# Output APK location
+RUN find . -name "*.apk" -path "*/debug/*" 2>/dev/null
