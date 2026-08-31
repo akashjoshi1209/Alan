@@ -1,0 +1,79 @@
+#!/bin/sh
+### BEGIN INIT INFO
+# Provides:          alan-kernel
+# Required-Start:    $remote_fs $network
+# Required-Stop:     $remote_fs $network
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: Alan personal AI kernel daemon
+# Description:       Runs the Alan kernel (alan kernel) as a supervised
+#                    background daemon with automatic restart.
+### END INIT INFO
+
+ALAN_WORKDIR=/root
+ALAN_BIN=/root/.pyenv/versions/3.12.11/bin/alan
+PIDFILE=/var/run/alan-kernel.pid
+LOGDIR=/root/logs
+OUTLOG=$LOGDIR/alan-kernel.out.log
+ERRLOG=$LOGDIR/alan-kernel.err.log
+
+is_running() {
+    [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null
+}
+
+start() {
+    if is_running; then
+        echo "alan-kernel: already running (pid $(cat "$PIDFILE"))"
+        return 0
+    fi
+    mkdir -p "$LOGDIR"
+    nohup setsid sh -c "
+        cd '$ALAN_WORKDIR' || exit 1
+        while true; do
+            '$ALAN_BIN' kernel
+            rc=\$?
+            echo \"\$(date -Is) alan kernel exited (rc=\$rc); restarting in 2s\" >> '$OUTLOG'
+            sleep 2
+        done
+    " >>"$OUTLOG" 2>>"$ERRLOG" &
+    echo $! > "$PIDFILE"
+    echo "alan-kernel: started (supervisor pid $(cat "$PIDFILE"), logs in $OUTLOG)"
+}
+
+stop() {
+    if [ ! -f "$PIDFILE" ]; then
+        echo "alan-kernel: not running"
+        return 0
+    fi
+    pid=$(cat "$PIDFILE")
+    kill -TERM -- "-$pid" 2>/dev/null
+    kill -TERM "$pid" 2>/dev/null
+    rm -f "$PIDFILE"
+    echo "alan-kernel: stopped"
+}
+
+status() {
+    if is_running; then
+        echo "alan-kernel: running (supervisor pid $(cat "$PIDFILE"))"
+        child=$(pgrep -f "$ALAN_BIN kernel" | head -1)
+        if [ -n "$child" ]; then
+            echo "alan-kernel: kernel process active (pid $child)"
+        else
+            echo "alan-kernel: supervisor up, kernel process starting"
+        fi
+        return 0
+    fi
+    echo "alan-kernel: stopped"
+    return 3
+}
+
+case "$1" in
+    start)  start ;;
+    stop)   stop ;;
+    restart) stop; sleep 1; start ;;
+    status) status ;;
+    *)
+        echo "Usage: $0 {start|stop|restart|status}"
+        exit 1
+        ;;
+esac
