@@ -132,6 +132,7 @@ class LintTool : Tool {
                     // Linter not installed, try next
                 }
             }
+        }
         
         return "unknown" to emptyList()
     }
