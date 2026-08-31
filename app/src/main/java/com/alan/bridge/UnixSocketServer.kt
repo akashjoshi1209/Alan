@@ -6,13 +6,13 @@ import com.alan.agent.AlanCore
 import com.alan.agent.AlanState
 import com.alan.memory.MemoryRepository
 import kotlinx.coroutines.*
-import kotlinx.coroutines.flow.collectLatest
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.io.OutputStreamWriter
 import java.io.PrintWriter
 import java.net.ServerSocket
 import java.net.Socket
+import java.util.UUID
 
 class UnixSocketServer(
     private val context: Context,
@@ -251,9 +251,5 @@ class UnixSocketServer(
             .replace("\n", "\\n")
             .replace("\r", "\\r")
             .replace("\t", "\\t")
-    }
-    
-    companion object {
-        const val SOCKET_NAME = "alan.port"
     }
 }
