@@ -3,7 +3,7 @@ package com.alan.ui.chat
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
-import androidx.compose.animation.animateFloatAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
