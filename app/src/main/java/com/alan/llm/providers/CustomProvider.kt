@@ -10,6 +10,8 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
+import okhttp3.Headers.Companion.toHeaders
+import okhttp3.Request
 
 class CustomProvider(
     baseUrl: String,
@@ -30,8 +32,8 @@ class CustomProvider(
     override suspend fun complete(
         systemPrompt: String,
         userMessage: String,
-        temperature: Float = 0.1f,
-        maxTokens: Int = 2048
+        temperature: Float,
+        maxTokens: Int
     ): Result<String> = withContext(Dispatchers.IO) {
         runCatching {
             val messages = JSONArray().apply {
@@ -75,8 +77,8 @@ class CustomProvider(
         systemPrompt: String,
         userMessage: String,
         onChunk: (String) -> Unit,
-        temperature: Float = 0.1f,
-        maxTokens: Int = 2048
+        temperature: Float,
+        maxTokens: Int
     ): Result<String> = withContext(Dispatchers.IO) {
         runCatching {
             val messages = JSONArray().apply {

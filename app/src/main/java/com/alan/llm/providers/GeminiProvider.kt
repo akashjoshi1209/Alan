@@ -7,6 +7,7 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
+import okhttp3.Request
 
 class GeminiProvider(
     apiKey: String,
@@ -20,14 +21,15 @@ class GeminiProvider(
     override val name = "Google Gemini"
     override val baseUrl = "https://generativelanguage.googleapis.com/v1beta"
     override val supportsStreaming = true
+    override val supportsTools = false
     override val defaultModel = "gemini-2.0-flash-exp"
     override val maxContextTokens = 1048576
     
     override suspend fun complete(
         systemPrompt: String,
         userMessage: String,
-        temperature: Float = 0.1f,
-        maxTokens: Int = 2048
+        temperature: Float,
+        maxTokens: Int
     ): Result<String> = withContext(Dispatchers.IO) {
         runCatching {
             val parts = mutableListOf<JSONObject>()
@@ -75,8 +77,8 @@ class GeminiProvider(
         systemPrompt: String,
         userMessage: String,
         onChunk: (String) -> Unit,
-        temperature: Float = 0.1f,
-        maxTokens: Int = 2048
+        temperature: Float,
+        maxTokens: Int
     ): Result<String> = withContext(Dispatchers.IO) {
         runCatching {
             val parts = mutableListOf<JSONObject>()

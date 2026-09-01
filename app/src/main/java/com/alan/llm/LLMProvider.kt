@@ -13,9 +13,9 @@ import okhttp3.MediaType.Companion.toMediaType
 interface LLMProvider {
     val name: String
     val baseUrl: String
-    val supportsStreaming: Boolean = false
-    val supportsTools: Boolean = false
-    val maxContextTokens: Int = 32768
+    val supportsStreaming: Boolean
+    val supportsTools: Boolean
+    val maxContextTokens: Int
     val defaultModel: String
     
     suspend fun complete(
@@ -72,20 +72,20 @@ data class ToolCall(
 abstract class BaseHttpProvider(
     protected val apiKey: String,
     protected val model: String,
-    protected val baseUrl: String = "https://api.openai.com/v1",
+    override val baseUrl: String = "https://api.openai.com/v1",
     protected val connectTimeoutSeconds: Int = 30,
     protected val readTimeoutSeconds: Int = 120
 ) : LLMProvider {
     
     protected val client = OkHttpClient.Builder()
-        .connectTimeout(connectTimeoutSeconds, TimeUnit.SECONDS)
-        .readTimeout(readTimeoutSeconds, TimeUnit.SECONDS)
+        .connectTimeout(connectTimeoutSeconds.toLong(), TimeUnit.SECONDS)
+        .readTimeout(readTimeoutSeconds.toLong(), TimeUnit.SECONDS)
         .writeTimeout(30, TimeUnit.SECONDS)
         .build()
     
     protected val mediaType = "application/json".toMediaType()
     
-    protected fun buildHeaders(): Map<String, String> = mapOf(
+    protected open fun buildHeaders(): Map<String, String> = mapOf(
         "Content-Type" to "application/json",
         "Authorization" to "Bearer $apiKey"
     )

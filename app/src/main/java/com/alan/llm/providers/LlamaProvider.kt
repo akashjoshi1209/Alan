@@ -18,6 +18,7 @@ class LlamaProvider(
     override val name = "Local Llama"
     override val baseUrl = "http://localhost:8080"
     override val supportsStreaming = false
+    override val supportsTools = false
     override val defaultModel = "phi3-mini"
     override val maxContextTokens = 32768
     
@@ -31,8 +32,8 @@ class LlamaProvider(
     override suspend fun complete(
         systemPrompt: String,
         userMessage: String,
-        temperature: Float = 0.1f,
-        maxTokens: Int = 2048
+        temperature: Float,
+        maxTokens: Int
     ): Result<String> = withContext(Dispatchers.IO) {
         runCatching {
             val requestBody = JSONObject().apply {
