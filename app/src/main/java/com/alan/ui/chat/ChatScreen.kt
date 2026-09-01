@@ -27,10 +27,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.key.KeyEventType
-import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.KeyEvent
-import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -97,13 +93,7 @@ fun ChatScreen(
         }
     }
 
-    // Handle Enter key to send
-    val textFieldKeyEventHandler = { event: KeyEvent ->
-        if (event.type == KeyEventType.KeyDown && event.key == Key.Enter && !event.isShiftPressed) {
-            sendMessage()
-            true
-        } else false
-    }
+    // Enter is handled through KeyboardActions(onDone) in the input field.
     
     Box(
         modifier = modifier
@@ -190,7 +180,6 @@ fun ChatScreen(
                 onTextChange = { inputText = it },
                 onSend = { sendMessage() },
                 isLoading = alanState is AlanState.Running,
-                keyEventHandler = textFieldKeyEventHandler,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(16.dp)
@@ -420,7 +409,6 @@ fun ChatInputArea(
     onTextChange: (String) -> Unit,
     onSend: () -> Unit,
     isLoading: Boolean,
-    keyEventHandler: (KeyEvent) -> Boolean,
     modifier: Modifier = Modifier
 ) {
     var showAttachmentMenu by remember { mutableStateOf(false) }
@@ -441,10 +429,8 @@ fun ChatInputArea(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f)
-                .padding(horizontal = 12.dp)
-                .onKeyEvent(keyEventHandler),
+                .padding(horizontal = 12.dp),
             textStyle = TextStyle(fontSize = 14.sp, color = AlanColors.TextPrimary),
-            placeholder = { Text("Ask Alan anything...", style = TextStyle(color = AlanColors.TextDisabled)) },
             singleLine = false,
             maxLines = 5,
             keyboardOptions = KeyboardOptions.Default.copy(imeAction = ImeAction.Send),
