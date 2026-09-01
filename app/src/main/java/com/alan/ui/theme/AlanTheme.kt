@@ -15,9 +15,6 @@ import androidx.compose.ui.unit.sp
 private val AlanDarkColorScheme = darkColorScheme(
     // Void 950 - Deep background
     surface = Color(0xFF0A0A0F),      // Void950
-    surfaceContainerLow = Color(0xFF11111A),  // Void900
-    surfaceContainer = Color(0xFF1A1A24),     // Void800
-    surfaceContainerHigh = Color(0xFF22222E), // Void700
     
     // Primary - Violet
     primary = Color(0xFF8B5CF6),      // Violet500
@@ -56,18 +53,12 @@ private val AlanDarkColorScheme = darkColorScheme(
     // Scrim
     scrim = Color(0xFF000000),
     
-    // Shadow
-    shadow = Color(0xFF000000),
-    
     // Surface tint
     surfaceTint = Color(0xFF8B5CF6),
 )
 
 private val AlanLightColorScheme = lightColorScheme(
     surface = Color(0xFFF8F8FF),
-    surfaceContainerLow = Color(0xFFF0F0FA),
-    surfaceContainer = Color(0xFFE8E8F0),
-    surfaceContainerHigh = Color(0xFFDCDCE0),
     
     primary = Color(0xFF6D28D9),
     primaryContainer = Color(0xFFEDE9FE),
@@ -98,7 +89,6 @@ private val AlanLightColorScheme = lightColorScheme(
     inverseSurface = Color(0xFF0A0A0F),
     
     scrim = Color(0xFF000000),
-    shadow = Color(0xFF000000),
     surfaceTint = Color(0xFF6D28D9),
 )
 

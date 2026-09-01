@@ -51,6 +51,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChatScreen(
     alanCore: com.alan.agent.AlanCore,
@@ -154,22 +155,32 @@ fun ChatScreen(
             // Error banner
             val errorState = alanState as? AlanState.Error
             if (errorState != null) {
-                Banner(
+                Surface(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 8.dp),
-                    colors = BannerDefaults.bannerColors(
-                        containerColor = AlanColors.RedDim,
-                        contentColor = AlanColors.Red
-                    ),
-                    leading = { Icon(Icons.Default.Error, contentDescription = "Error", tint = AlanColors.Red) },
-                    content = { Text(errorState.message, color = AlanColors.Red, style = TextStyle(fontSize = 14.sp)) },
-                    actions = {
+                    shape = RoundedCornerShape(12.dp),
+                    color = AlanColors.RedDim,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, AlanColors.Red.copy(alpha = 0.4f))
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.Error, contentDescription = "Error", tint = AlanColors.Red)
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(
+                            text = errorState.message,
+                            color = AlanColors.Red,
+                            style = TextStyle(fontSize = 14.sp),
+                            modifier = Modifier.weight(1f)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
                         TextButton(onClick = { alanCore.dismissError() }) {
                             Text("Dismiss", color = AlanColors.Red)
                         }
                     }
-                )
+                }
             }
             
             // Input Area
