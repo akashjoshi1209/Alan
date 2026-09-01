@@ -16,6 +16,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -187,7 +188,7 @@ fun ChatScreen(
             ChatInputArea(
                 text = inputText,
                 onTextChange = { inputText = it },
-                onSend = sendMessage,
+                onSend = { sendMessage() },
                 isLoading = alanState is AlanState.Running,
                 keyEventHandler = textFieldKeyEventHandler,
                 modifier = Modifier
