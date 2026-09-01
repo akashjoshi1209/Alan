@@ -1,10 +1,15 @@
 package com.alan.ui.theme
 
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Shapes
+import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 
 // VOID-inspired dark color scheme for Alan
 private val AlanDarkColorScheme = darkColorScheme(
@@ -144,11 +149,33 @@ fun AlanTheme(
     content: @Composable () -> Unit
 ) {
     val colorScheme = if (darkTheme) AlanDarkColorScheme else AlanLightColorScheme
-    
+
     MaterialTheme(
         colorScheme = colorScheme,
-        typography = AlanTypography,
-        shapes = AlanShapes,
+        typography = Typography(
+            displayLarge = AlanTypography.displayLarge,
+            displayMedium = AlanTypography.displayMedium,
+            displaySmall = AlanTypography.displaySmall,
+            headlineLarge = AlanTypography.headlineLarge,
+            headlineMedium = AlanTypography.headlineMedium,
+            headlineSmall = AlanTypography.headlineSmall,
+            titleLarge = AlanTypography.titleLarge,
+            titleMedium = AlanTypography.titleMedium,
+            titleSmall = AlanTypography.titleSmall,
+            bodyLarge = AlanTypography.bodyLarge,
+            bodyMedium = AlanTypography.bodyMedium,
+            bodySmall = AlanTypography.bodySmall,
+            labelLarge = AlanTypography.labelLarge,
+            labelMedium = AlanTypography.labelMedium,
+            labelSmall = AlanTypography.labelSmall
+        ),
+        shapes = Shapes(
+            extraSmall = AlanShapes.extraSmall,
+            small = AlanShapes.small,
+            medium = AlanShapes.medium,
+            large = AlanShapes.large,
+            extraLarge = AlanShapes.extraLarge
+        ),
         content = content
     )
 }
@@ -158,7 +185,7 @@ object AlanTypography {
     val fontFamily = androidx.compose.ui.text.font.FontFamily.Default
     val fontFamilyMono = androidx.compose.ui.text.font.FontFamily.Monospace
     
-    val displayLarge = androidx.compose.material3.TextStyle(
+    val displayLarge = TextStyle(
         fontFamily = fontFamily,
         fontWeight = androidx.compose.ui.text.font.FontWeight(700),
         fontSize = 48.sp,
@@ -167,7 +194,7 @@ object AlanTypography {
         color = AlanColors.TextPrimary
     )
     
-    val displayMedium = androidx.compose.material3.TextStyle(
+    val displayMedium = TextStyle(
         fontFamily = fontFamily,
         fontWeight = androidx.compose.ui.text.font.FontWeight(600),
         fontSize = 36.sp,
@@ -176,7 +203,7 @@ object AlanTypography {
         color = AlanColors.TextPrimary
     )
     
-    val displaySmall = androidx.compose.material3.TextStyle(
+    val displaySmall = TextStyle(
         fontFamily = fontFamily,
         fontWeight = androidx.compose.ui.text.font.FontWeight(600),
         fontSize = 28.sp,
@@ -184,7 +211,7 @@ object AlanTypography {
         color = AlanColors.TextPrimary
     )
     
-    val headlineLarge = androidx.compose.material3.TextStyle(
+    val headlineLarge = TextStyle(
         fontFamily = fontFamily,
         fontWeight = androidx.compose.ui.text.font.FontWeight(600),
         fontSize = 24.sp,
@@ -192,7 +219,7 @@ object AlanTypography {
         color = AlanColors.TextPrimary
     )
     
-    val headlineMedium = androidx.compose.material3.TextStyle(
+    val headlineMedium = TextStyle(
         fontFamily = fontFamily,
         fontWeight = androidx.compose.ui.text.font.FontWeight(600),
         fontSize = 20.sp,
@@ -200,7 +227,7 @@ object AlanTypography {
         color = AlanColors.TextPrimary
     )
     
-    val headlineSmall = androidx.compose.material3.TextStyle(
+    val headlineSmall = TextStyle(
         fontFamily = fontFamily,
         fontWeight = androidx.compose.ui.text.font.FontWeight(600),
         fontSize = 16.sp,
@@ -208,7 +235,7 @@ object AlanTypography {
         color = AlanColors.TextPrimary
     )
     
-    val titleLarge = androidx.compose.material3.TextStyle(
+    val titleLarge = TextStyle(
         fontFamily = fontFamily,
         fontWeight = androidx.compose.ui.text.font.FontWeight(500),
         fontSize = 18.sp,
@@ -216,7 +243,7 @@ object AlanTypography {
         color = AlanColors.TextPrimary
     )
     
-    val titleMedium = androidx.compose.material3.TextStyle(
+    val titleMedium = TextStyle(
         fontFamily = fontFamily,
         fontWeight = androidx.compose.ui.text.font.FontWeight(500),
         fontSize = 14.sp,
@@ -224,7 +251,7 @@ object AlanTypography {
         color = AlanColors.TextPrimary
     )
     
-    val titleSmall = androidx.compose.material3.TextStyle(
+    val titleSmall = TextStyle(
         fontFamily = fontFamily,
         fontWeight = androidx.compose.ui.text.font.FontWeight(500),
         fontSize = 12.sp,
@@ -232,7 +259,7 @@ object AlanTypography {
         color = AlanColors.TextPrimary
     )
     
-    val bodyLarge = androidx.compose.material3.TextStyle(
+    val bodyLarge = TextStyle(
         fontFamily = fontFamily,
         fontWeight = androidx.compose.ui.text.font.FontWeight(400),
         fontSize = 16.sp,
@@ -240,7 +267,7 @@ object AlanTypography {
         color = AlanColors.TextPrimary
     )
     
-    val bodyMedium = androidx.compose.material3.TextStyle(
+    val bodyMedium = TextStyle(
         fontFamily = fontFamily,
         fontWeight = androidx.compose.ui.text.font.FontWeight(400),
         fontSize = 14.sp,
@@ -248,7 +275,7 @@ object AlanTypography {
         color = AlanColors.TextPrimary
     )
     
-    val bodySmall = androidx.compose.material3.TextStyle(
+    val bodySmall = TextStyle(
         fontFamily = fontFamily,
         fontWeight = androidx.compose.ui.text.font.FontWeight(400),
         fontSize = 12.sp,
@@ -256,7 +283,7 @@ object AlanTypography {
         color = AlanColors.TextSecondary
     )
     
-    val labelLarge = androidx.compose.material3.TextStyle(
+    val labelLarge = TextStyle(
         fontFamily = fontFamily,
         fontWeight = androidx.compose.ui.text.font.FontWeight(500),
         fontSize = 14.sp,
@@ -264,7 +291,7 @@ object AlanTypography {
         color = AlanColors.TextPrimary
     )
     
-    val labelMedium = androidx.compose.material3.TextStyle(
+    val labelMedium = TextStyle(
         fontFamily = fontFamily,
         fontWeight = androidx.compose.ui.text.font.FontWeight(500),
         fontSize = 12.sp,
@@ -272,7 +299,7 @@ object AlanTypography {
         color = AlanColors.TextPrimary
     )
     
-    val labelSmall = androidx.compose.material3.TextStyle(
+    val labelSmall = TextStyle(
         fontFamily = fontFamily,
         fontWeight = androidx.compose.ui.text.font.FontWeight(500),
         fontSize = 11.sp,
@@ -281,7 +308,7 @@ object AlanTypography {
     )
     
     // Code styles
-    val codeInline = androidx.compose.material3.TextStyle(
+    val codeInline = TextStyle(
         fontFamily = fontFamilyMono,
         fontWeight = androidx.compose.ui.text.font.FontWeight(400),
         fontSize = 13.sp,
@@ -289,7 +316,7 @@ object AlanTypography {
         color = AlanColors.Cyan
     )
     
-    val codeBlock = androidx.compose.material3.TextStyle(
+    val codeBlock = TextStyle(
         fontFamily = fontFamilyMono,
         fontWeight = androidx.compose.ui.text.font.FontWeight(400),
         fontSize = 12.sp,

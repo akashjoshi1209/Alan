@@ -15,6 +15,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -381,15 +382,11 @@ fun TypingIndicator(step: String) {
                 modifier = Modifier.padding(16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                androidx.compose.foundation.layout.Box(
-                    modifier = Modifier.size(8.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    androidx.compose.animation.graphics.vector.AnimatedImageVector.animatedVectorByResource(
-                        animatedVector = androidx.compose.ui.res.animatedVectorResource(androidx.compose.ui.res.R.drawable.ic_typing),
-                        atEnd = true
-                    )
-                }
+                CircularProgressIndicator(
+                    modifier = Modifier.size(16.dp),
+                    strokeWidth = 2.dp,
+                    color = AlanColors.Cyan
+                )
                 Spacer(modifier = Modifier.width(12.dp))
                 Text("Alan is $step", style = TextStyle(fontSize = 14.sp, color = AlanColors.TextSecondary))
             }
