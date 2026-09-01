@@ -3,10 +3,7 @@ package com.alan.memory.nodes
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
-import kotlinx.parcelize.Parcelize
-import android.os.Parcelable
 
-@Parcelize
 @Entity(
     tableName = "files",
     indices = [
@@ -28,4 +25,4 @@ data class FileNode(
     val exports: String = "[]",
     val lastModified: Long = 0L,
     val lastIndexed: Long = System.currentTimeMillis()
-) : Parcelable
+)

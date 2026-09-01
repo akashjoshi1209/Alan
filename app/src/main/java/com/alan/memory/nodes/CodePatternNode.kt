@@ -3,10 +3,7 @@ package com.alan.memory.nodes
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
-import kotlinx.parcelize.Parcelize
-import android.os.Parcelable
 
-@Parcelize
 @Entity(
     tableName = "code_patterns",
     indices = [
@@ -29,4 +26,4 @@ data class CodePatternNode(
     val tags: String = "[]",
     val createdAt: Long = System.currentTimeMillis(),
     val lastUsed: Long = System.currentTimeMillis()
-) : Parcelable
+)

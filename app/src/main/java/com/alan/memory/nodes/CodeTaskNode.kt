@@ -3,10 +3,7 @@ package com.alan.memory.nodes
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
-import kotlinx.parcelize.Parcelize
-import android.os.Parcelable
 
-@Parcelize
 @Entity(
     tableName = "code_tasks",
     indices = [
@@ -28,4 +25,4 @@ data class CodeTaskNode(
     val latencyMs: Long = 0L,
     val tokensUsed: Int = 0,
     val timestamp: Long = System.currentTimeMillis()
-) : Parcelable
+)

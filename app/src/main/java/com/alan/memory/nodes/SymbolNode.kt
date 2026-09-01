@@ -3,10 +3,7 @@ package com.alan.memory.nodes
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
-import kotlinx.parcelize.Parcelize
-import android.os.Parcelable
 
-@Parcelize
 @Entity(
     tableName = "symbols",
     indices = [
@@ -30,4 +27,4 @@ data class SymbolNode(
     val calls: String = "[]",
     val calledBy: String = "[]",
     val lastIndexed: Long = System.currentTimeMillis()
-) : Parcelable
+)

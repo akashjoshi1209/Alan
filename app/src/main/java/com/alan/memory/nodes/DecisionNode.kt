@@ -3,10 +3,7 @@ package com.alan.memory.nodes
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
-import kotlinx.parcelize.Parcelize
-import android.os.Parcelable
 
-@Parcelize
 @Entity(
     tableName = "decisions",
     indices = [
@@ -25,4 +22,4 @@ data class DecisionNode(
     val tags: String = "[]",
     val confidence: Float = 1.0f,
     val timestamp: Long = System.currentTimeMillis()
-) : Parcelable
+)

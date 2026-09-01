@@ -3,10 +3,7 @@ package com.alan.memory.nodes
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
-import kotlinx.parcelize.Parcelize
-import android.os.Parcelable
 
-@Parcelize
 @Entity(
     tableName = "edges",
     indices = [
@@ -27,4 +24,4 @@ data class EdgeEntity(
     val type: String,
     val weight: Float = 1.0f,
     val createdAt: Long = System.currentTimeMillis()
-) : Parcelable
+)

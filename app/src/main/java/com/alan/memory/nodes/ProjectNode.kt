@@ -3,10 +3,7 @@ package com.alan.memory.nodes
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
-import kotlinx.parcelize.Parcelize
-import android.os.Parcelable
 
-@Parcelize
 @Entity(
     tableName = "projects",
     indices = [
@@ -24,4 +21,4 @@ data class ProjectNode(
     val gitRemote: String? = null,
     val lastOpened: Long = System.currentTimeMillis(),
     val createdAt: Long = System.currentTimeMillis()
-) : Parcelable
+)
