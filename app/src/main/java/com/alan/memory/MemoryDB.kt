@@ -3,6 +3,21 @@ package com.alan.memory
 import androidx.room.*
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import com.alan.memory.nodes.CodePatternNode
+import com.alan.memory.nodes.CodePatternNodeDao
+import com.alan.memory.nodes.CodeTaskNode
+import com.alan.memory.nodes.CodeTaskNodeDao
+import com.alan.memory.nodes.DecisionNode
+import com.alan.memory.nodes.DecisionNodeDao
+import com.alan.memory.nodes.EdgeDao
+import com.alan.memory.nodes.EdgeEntity
+import com.alan.memory.nodes.FileNode
+import com.alan.memory.nodes.FileNodeDao
+import com.alan.memory.nodes.ProjectNode
+import com.alan.memory.nodes.ProjectNodeDao
+import com.alan.memory.nodes.ProviderStatsDao
+import com.alan.memory.nodes.SymbolNode
+import com.alan.memory.nodes.SymbolNodeDao
 
 @Database(
     entities = [
