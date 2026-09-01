@@ -3,7 +3,6 @@ package com.alan.ui.chat
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
-import android.view.KeyEvent
 import androidx.compose.animation.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -13,9 +12,11 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -26,11 +27,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.text.*
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.*
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -68,9 +73,31 @@ fun ChatScreen(
         }
     }
     
+    // Send a user message
+    fun sendMessage() {
+        val text = inputText.trim()
+        if (text.isBlank()) return
+
+        val userMessage = ChatMessage(
+            id = System.currentTimeMillis().toString(),
+            role = ChatRole.User,
+            content = text,
+            timestamp = System.currentTimeMillis()
+        )
+
+        messages = messages + userMessage
+        inputText = ""
+        scrollToBottom = true
+
+        // Execute task
+        CoroutineScope(Dispatchers.IO).launch {
+            alanCore.executeTask(text)
+        }
+    }
+
     // Handle Enter key to send
     val textFieldKeyEventHandler = { event: KeyEvent ->
-        if (event.type == KeyEventType.KeyDown && event.keyCode == KeyEvent.KEYCODE_ENTER && !event.isShiftPressed) {
+        if (event.type == KeyEventType.KeyDown && event.key == Key.Enter && !event.isShiftPressed) {
             sendMessage()
             true
         } else false
@@ -116,15 +143,17 @@ fun ChatScreen(
                 }
                 
                 // Typing indicator
-                if (alanState is AlanState.Running) {
+                val runningState = alanState as? AlanState.Running
+                if (runningState != null) {
                     item {
-                        TypingIndicator(step = alanState.step)
+                        TypingIndicator(step = runningState.step)
                     }
                 }
             }
             
             // Error banner
-            if (alanState is AlanState.Error) {
+            val errorState = alanState as? AlanState.Error
+            if (errorState != null) {
                 Banner(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -134,9 +163,9 @@ fun ChatScreen(
                         contentColor = AlanColors.Red
                     ),
                     leading = { Icon(Icons.Default.Error, contentDescription = "Error", tint = AlanColors.Red) },
-                    content = { Text(alanState.message, color = AlanColors.Red, style = TextStyle(fontSize = 14.sp)) },
+                    content = { Text(errorState.message, color = AlanColors.Red, style = TextStyle(fontSize = 14.sp)) },
                     actions = {
-                        TextButton(onClick = { alanCore.state.value = AlanState.Idle }) {
+                        TextButton(onClick = { alanCore.dismissError() }) {
                             Text("Dismiss", color = AlanColors.Red)
                         }
                     }
@@ -164,27 +193,6 @@ fun ChatScreen(
                 alanCore = alanCore,
                 memoryRepo = memoryRepo
             )
-        }
-    }
-    
-    fun sendMessage() {
-        val text = inputText.trim()
-        if (text.isBlank()) return
-        
-        val userMessage = ChatMessage(
-            id = System.currentTimeMillis().toString(),
-            role = ChatRole.User,
-            content = text,
-            timestamp = System.currentTimeMillis()
-        )
-        
-        messages = messages + userMessage
-        inputText = ""
-        scrollToBottom = true
-        
-        // Execute task
-        CoroutineScope(Dispatchers.IO).launch {
-            alanCore.executeTask(text)
         }
     }
 }
@@ -254,7 +262,7 @@ fun MessageBubble(message: ChatMessage) {
             modifier = Modifier
                 .fillMaxWidth(0.85f)
                 .padding(vertical = 4.dp),
-            contentAlignment = alignment
+            contentAlignment = if (isUser) Alignment.CenterEnd else Alignment.CenterStart
         ) {
             Surface(
                 modifier = Modifier
@@ -301,7 +309,7 @@ fun ToolCallBubble(tool: String, args: String) {
             .fillMaxWidth(0.8f)
             .padding(vertical = 4.dp)
             .wrapContentWidth(),
-        contentAlignment = Alignment.Start
+        contentAlignment = Alignment.CenterStart
     ) {
         Surface(
             shape = RoundedCornerShape(12.dp),
@@ -336,7 +344,7 @@ fun ToolResultBubble(tool: String, success: Boolean, output: String) {
             .fillMaxWidth(0.8f)
             .padding(vertical = 4.dp)
             .wrapContentWidth(),
-        contentAlignment = Alignment.Start
+        contentAlignment = Alignment.CenterStart
     ) {
         Surface(
             shape = RoundedCornerShape(12.dp),

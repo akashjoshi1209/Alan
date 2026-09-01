@@ -204,6 +204,7 @@ fun SettingsScreen(
                                                     "MINIMUM" -> "Gemma 2B (1.5GB)"
                                                     "BALANCED" -> "Phi-3.5 Mini (2.2GB)"
                                                     "POWER" -> "Llama 3.2 3B (2.0GB)"
+                                                    else -> ""
                                                 },
                                                 style = TextStyle(fontWeight = FontWeight(400), fontSize = 10.sp, color = AlanColors.TextDisabled)
                                             )
@@ -276,14 +277,18 @@ fun SettingsScreen(
                 Spacer(modifier = Modifier.height(32.dp))
             }
             
-            SavedToast(
-                visible = savedVisible,
-                onDismiss = { savedVisible = false },
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .navigationBarsPadding()
-                    .padding(16.dp)
-            )
+            Box(
+                modifier = Modifier.fillMaxWidth(),
+                contentAlignment = Alignment.BottomCenter
+            ) {
+                SavedToast(
+                    visible = savedVisible,
+                    onDismiss = { savedVisible = false },
+                    modifier = Modifier
+                        .navigationBarsPadding()
+                        .padding(16.dp)
+                )
+            }
         }
     }
 }

@@ -208,6 +208,10 @@ Based on these results, provide a final answer to the user's original query: "$u
     fun getCurrentProviderName(): String = universalAdapter.getProviderName()
     
     fun getStateFlow(): StateFlow<AlanState> = state
+
+    fun dismissError() {
+        _state.value = AlanState.Idle
+    }
     
     fun shutdown() {
         unixSocketServer.stop()

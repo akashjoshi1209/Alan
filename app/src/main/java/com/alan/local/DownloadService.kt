@@ -39,7 +39,7 @@ class DownloadService : Service() {
         val tier = ModelManager.ModelTier.fromName(tierName) ?: return START_NOT_STICKY
         
         val notification = buildNotification("Downloading ${tier.displayName}...", 0f).build()
-        startForeground(NOTIFICATION_ID, notification, FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+        startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
         
         scope.launch {
             modelManager.downloadModel(tier) { progress ->
