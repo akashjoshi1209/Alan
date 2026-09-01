@@ -209,3 +209,26 @@ kustomization.yaml
 
 # MCP servers
 .mcp/
+
+# --- Android / Gradle ---
+# Gradle caches and wrapper distributions (machine-generated, not source)
+.gradle/
+gradle/wrapper/dists/
+
+# Android build outputs (generated sources, intermediate artifacts, APKs)
+build/
+app/build/
+
+# Android Studio / IntelliJ
+.cxx/
+*.iml
+.idea/
+android/
+captures/
+.externalNativeBuild
+
+# Keystores & local machine config (mirrors the debugkeystore flag)
+*.jks
+*.keystore
+!debug.keystore
+local.properties

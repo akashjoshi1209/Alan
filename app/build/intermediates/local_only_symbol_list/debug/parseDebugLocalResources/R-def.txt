@@ -1,6 +1,0 @@
-R_DEF: Internal format may change without notice
-local
-drawable ic_download
-string app_name
-string app_name_short
-style Theme.Alan
