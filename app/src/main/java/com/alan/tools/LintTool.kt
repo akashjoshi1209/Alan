@@ -4,6 +4,7 @@ import com.alan.agent.Tool
 import com.alan.agent.ToolResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 
@@ -84,40 +85,40 @@ class LintTool : Tool {
         val linters = listOf(
             // JavaScript/TypeScript
             LinterDetector("eslint", File(projectDir, "package.json"), 
-                { listOf("npx", "eslint", if (action == "fix") "--fix" else "", path.ifBlank { "." }).filter { it.isNotBlank() } },
+                { _, _ -> listOf("npx", "eslint", if (action == "fix") "--fix" else "", path.ifBlank { "." }).filter { it.isNotBlank() } },
                 { listOf("npx", "eslint", "--version") }
             ),
             LinterDetector("prettier", File(projectDir, "package.json"),
-                { listOf("npx", "prettier", if (action == "fix") "--write" else "--check", path.ifBlank { "." }).filter { it.isNotBlank() } },
+                { _, _ -> listOf("npx", "prettier", if (action == "fix") "--write" else "--check", path.ifBlank { "." }).filter { it.isNotBlank() } },
                 { listOf("npx", "prettier", "--version") }
             ),
             // Python
             LinterDetector("ruff", File(projectDir, "pyproject.toml"),
-                { listOf("ruff", "check", if (action == "fix") "--fix" else "", path.ifBlank { "." }).filter { it.isNotBlank() } },
+                { _, _ -> listOf("ruff", "check", if (action == "fix") "--fix" else "", path.ifBlank { "." }).filter { it.isNotBlank() } },
                 { listOf("ruff", "--version") }
             ),
             LinterDetector("black", File(projectDir, "pyproject.toml"),
-                { listOf("black", if (action == "fix") "" else "--check", path.ifBlank { "." }).filter { it.isNotBlank() } },
+                { _, _ -> listOf("black", if (action == "fix") "" else "--check", path.ifBlank { "." }).filter { it.isNotBlank() } },
                 { listOf("black", "--version") }
             ),
             // Rust
             LinterDetector("clippy", File(projectDir, "Cargo.toml"),
-                { listOf("cargo", "clippy", "--", "-D", "warnings") },
+                { _, _ -> listOf("cargo", "clippy", "--", "-D", "warnings") },
                 { listOf("cargo", "clippy", "--version") }
             ),
             // Go
             LinterDetector("golangci-lint", File(projectDir, "go.mod"),
-                { listOf("golangci-lint", "run", if (action == "fix") "--fix" else "") },
+                { _, _ -> listOf("golangci-lint", "run", if (action == "fix") "--fix" else "") },
                 { listOf("golangci-lint", "--version") }
             ),
             // Java/Kotlin
             LinterDetector("ktlint", File(projectDir, "build.gradle.kts"),
-                { listOf("./gradlew", "ktlintCheck", if (action == "fix") "ktlintFormat" else "") },
+                { _, _ -> listOf("./gradlew", "ktlintCheck", if (action == "fix") "ktlintFormat" else "") },
                 { listOf("./gradlew", "ktlintCheck", "--version") }
             ),
             // Shell
             LinterDetector("shellcheck", File(projectDir, ".shellcheckrc"),
-                { listOf("shellcheck", path.ifBlank { "**/*.sh" }) },
+                { _, _ -> listOf("shellcheck", path.ifBlank { "**/*.sh" }) },
                 { listOf("shellcheck", "--version") }
             )
         )

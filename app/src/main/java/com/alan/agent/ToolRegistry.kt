@@ -20,7 +20,8 @@ data class ToolResult(
     val success: Boolean,
     val output: String,
     val error: String? = null,
-    val artifacts: List<String> = emptyList()
+    val artifacts: List<String> = emptyList(),
+    val exitCode: Int = 0
 )
 
 interface Tool {

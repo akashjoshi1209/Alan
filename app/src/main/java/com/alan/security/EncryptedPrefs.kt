@@ -1,11 +1,12 @@
 package com.alan.security
 
 import android.content.Context
+import android.content.SharedPreferences
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 
 class EncryptedPrefs private constructor(
-    private val prefs: EncryptedSharedPreferences
+    private val prefs: SharedPreferences
 ) {
     companion object {
         private var instance: EncryptedPrefs? = null
@@ -16,7 +17,7 @@ class EncryptedPrefs private constructor(
             }
         }
         
-        private fun createPrefs(context: Context): EncryptedSharedPreferences {
+        private fun createPrefs(context: Context): SharedPreferences {
             val masterKey = MasterKey.Builder(context)
                 .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
                 .build()

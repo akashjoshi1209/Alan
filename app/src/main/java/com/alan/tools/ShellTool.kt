@@ -3,8 +3,11 @@ package com.alan.tools
 import com.alan.agent.Tool
 import com.alan.agent.ToolResult
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
 import org.json.JSONObject
+import java.io.File
 
 class ShellTool : Tool {
     override val name = "shell"

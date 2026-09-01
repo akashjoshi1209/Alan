@@ -4,6 +4,7 @@ import com.alan.agent.Tool
 import com.alan.agent.ToolResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 

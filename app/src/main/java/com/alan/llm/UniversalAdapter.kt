@@ -69,12 +69,10 @@ class UniversalAdapter(private val context: Context) {
     }
     
     fun saveSettings(name: String, baseUrl: String, apiKey: String, model: String) {
-        prefs.edit().apply {
-            putString("provider_name", name)
-            putString("provider_base_url", baseUrl)
-            putString("provider_api_key", apiKey)
-            putString("provider_model", model)
-        }
+        prefs.putString("provider_name", name)
+        prefs.putString("provider_base_url", baseUrl)
+        prefs.putString("provider_api_key", apiKey)
+        prefs.putString("provider_model", model)
     }
     
     fun getProviderName(): String = prefs.getString("provider_name", "Groq") ?: "Groq"

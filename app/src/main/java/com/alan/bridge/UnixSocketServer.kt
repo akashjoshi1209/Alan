@@ -6,6 +6,7 @@ import com.alan.agent.AlanCore
 import com.alan.agent.AlanState
 import com.alan.memory.MemoryRepository
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.collectLatest
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.io.OutputStreamWriter
@@ -175,7 +176,7 @@ class UnixSocketServer(
     }
     
     private suspend fun handleMemory(writer: PrintWriter, requestId: String) {
-        val context = memoryRepo.buildMemoryContext("")
+        val context = memoryRepo.buildMemoryContext()
         val contextJson = """{"requestId":"$requestId","status":"done","result":"${escapeJson(context)}"}"""
         writer.println(contextJson)
     }

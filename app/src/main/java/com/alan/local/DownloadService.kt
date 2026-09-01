@@ -8,12 +8,15 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import com.alan.R
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 
 class DownloadService : Service() {
@@ -35,17 +38,17 @@ class DownloadService : Service() {
         val modelManager = ModelManager.getInstance(this)
         val tier = ModelManager.ModelTier.fromName(tierName) ?: return START_NOT_STICKY
         
-        val notification = buildNotification("Downloading ${tier.displayName}...", 0f)
+        val notification = buildNotification("Downloading ${tier.displayName}...", 0f).build()
         startForeground(NOTIFICATION_ID, notification, FOREGROUND_SERVICE_TYPE_DATA_SYNC)
         
         scope.launch {
             modelManager.downloadModel(tier) { progress ->
-                val notif = buildNotification("Downloading ${tier.displayName}...", progress)
+                val notif = buildNotification("Downloading ${tier.displayName}...", progress).build()
                 val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
                 manager.notify(NOTIFICATION_ID, notif)
             }.fold(
                 onSuccess = { size ->
-                    val notif = buildNotification("Downloaded ${tier.displayName} (${formatBytes(size)})", 1f)
+                    val notif = buildNotification("Downloaded ${tier.displayName} (${formatBytes(size)})", 1f).build()
                     val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
                     manager.notify(NOTIFICATION_ID, notif)
                     stopSelf()

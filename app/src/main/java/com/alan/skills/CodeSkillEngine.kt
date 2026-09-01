@@ -38,14 +38,14 @@ class CodeSkillEngine(private val context: Context) {
     }
     
     private fun copyBuiltinSkillsIfNeeded() {
-        val builtinDir = File(context.assets, "skills")
-        if (!builtinDir.exists()) return
+        val assetNames = context.assets.list("skills")
+        if (assetNames == null || assetNames.isEmpty()) return
         
-        builtinDir.listFiles()?.forEach { assetFile ->
-            val destFile = File(skillsDir, assetFile.name)
+        assetNames.forEach { name ->
+            val destFile = File(skillsDir, name)
             if (!destFile.exists()) {
                 try {
-                    context.assets.open("skills/${assetFile.name}").use { input ->
+                    context.assets.open("skills/$name").use { input ->
                         destFile.outputStream().use { output ->
                             input.copyTo(output)
                         }

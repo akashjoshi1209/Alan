@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 class AlanCore(private val context: Context) {
     
@@ -129,20 +130,20 @@ After receiving tool results, continue your reasoning or provide the final answe
         var toolCalls = mutableListOf<Pair<String, org.json.JSONObject>>()
         
         for (line in lines) {
-            line = line.trim()
-            if (line.startsWith("{") && line.endsWith("}")) {
+            val trimmed = line.trim()
+            if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
                 try {
-                    val json = org.json.JSONObject(line)
+                    val json = org.json.JSONObject(trimmed)
                     if (json.has("tool") && json.has("args")) {
                         toolCalls.add(json.getString("tool") to json.getJSONObject("args"))
                     } else {
-                        finalAnswer += line + "\n"
+                        finalAnswer += trimmed + "\n"
                     }
                 } catch (e: Exception) {
-                    finalAnswer += line + "\n"
+                    finalAnswer += trimmed + "\n"
                 }
             } else {
-                finalAnswer += line + "\n"
+                finalAnswer += trimmed + "\n"
             }
         }
         
@@ -192,7 +193,13 @@ Based on these results, provide a final answer to the user's original query: "$u
     
     private suspend fun logTask(query: String, result: String, provider: String, latency: Long) {
         if (currentProjectId > 0) {
-            memoryRepo.logTask(currentProjectId, query, "", result, provider, latency)
+            memoryRepo.logTask(
+                projectId = currentProjectId,
+                userQuery = query,
+                result = result,
+                provider = provider,
+                latencyMs = latency
+            )
         }
     }
     

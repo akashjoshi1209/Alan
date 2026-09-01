@@ -4,6 +4,7 @@ import com.alan.agent.Tool
 import com.alan.agent.ToolResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 
@@ -35,8 +36,8 @@ class GitTool : Tool {
     override suspend fun execute(args: JSONObject): ToolResult = withContext(Dispatchers.IO) {
         val action = args.optString("action", "status")
         val cwd = args.optString("cwd", "/data/data/com.alan/files/projects")
-        val extraArgs = args.optJSONArray("args")?.let { 
-            (0 until it.length()).map { it.getString(it) } 
+        val extraArgs = args.optJSONArray("args")?.let { arr ->
+            (0 until arr.length()).map { index -> arr.getString(index) }
         } ?: emptyList()
         
         return@withContext try {
