@@ -30,7 +30,7 @@ interface CodePatternNodeDao {
     @Query("SELECT * FROM code_patterns WHERE projectId = :projectId AND trigger LIKE '%' || :query || '%' LIMIT :limit")
     suspend fun searchPatterns(projectId: Long, query: String, limit: Int): List<CodePatternNode>
     
-    @Query("UPDATE code_patterns SET usageCount = usageCount + 1, lastUsed = :timestamp, successRate = :successRate WHERE id = :id")
+    @Query("UPDATE code_patterns SET usageCount = usageCount + 1, lastUsed = :timestamp, successRate = CASE WHEN :success THEN :successRate ELSE :successRate END WHERE id = :id")
     suspend fun recordUsage(id: Long, success: Boolean, successRate: Float, timestamp: Long = System.currentTimeMillis()): Int
     
     @Query("UPDATE code_patterns SET confidence = :confidence WHERE id = :id")
