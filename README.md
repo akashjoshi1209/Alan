@@ -54,7 +54,3 @@ Alan/
 2. Chat with Alan about code tasks
 3. Alan will use tools to explore, edit, test code
 4. All context persisted in local memory
-
-## License
-
-MIT
