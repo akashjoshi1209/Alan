@@ -10,10 +10,9 @@ import typer
 from rich.console import Console
 
 from . import __version__
-from .assistant import Alan
+from .assistant import Alan, session_path
 from .chatfeed import ChatFeed
 from .config import (
-    CONFIG_DIR,
     COGNEE_DIR,
     DATA_DIR,
     ENV_FILE,
@@ -230,7 +229,6 @@ def forget(
     a typo must not be able to erase the user's memory.
     """
     from .memory.providers import build_memory_provider
-    from .interfaces.memory import MemoryProvider
 
     settings = load_settings()
     provider, note = build_memory_provider(settings.memory, model=settings.ollama.model)
@@ -375,6 +373,9 @@ def _one_shot(text: str, use_stream: bool) -> None:
     except ProviderError as exc:
         console.print(f"[red]{exc}[/red]")
         raise typer.Exit(code=1)
+    except Exception as exc:
+        console.print(f"[red]{type(exc).__name__}: {exc}[/red]")
+        raise typer.Exit(code=1)
 
     if use_stream:
         try:
@@ -384,11 +385,17 @@ def _one_shot(text: str, use_stream: bool) -> None:
         except ProviderError as exc:
             console.print(f"[red]{exc}[/red]")
             raise typer.Exit(code=1)
+        except Exception as exc:
+            console.print(f"[red]{type(exc).__name__}: {exc}[/red]")
+            raise typer.Exit(code=1)
     else:
         try:
             console.print(Markdown(alan.ask(text, remember=False)))
         except ProviderError as exc:
             console.print(f"[red]{exc}[/red]")
+            raise typer.Exit(code=1)
+        except Exception as exc:
+            console.print(f"[red]{type(exc).__name__}: {exc}[/red]")
             raise typer.Exit(code=1)
 
 
@@ -483,9 +490,11 @@ def chat(
             continue
         if user.startswith("/load "):
             name = user[len("/load ") :].strip()
-            target = SESSION_DIR / name
-            if target.suffix != ".json":
-                target = target.with_suffix(".json")
+            try:
+                target = session_path(name)
+            except ValueError as exc:
+                console.print(f"[red]{exc}[/red]")
+                continue
             if target.exists():
                 alan.load_session(target)
                 console.print(f"[dim]loaded: {target.name} ({len(alan.history)} messages)[/dim]")
@@ -536,8 +545,11 @@ def chat(
                 if not request:
                     console.print("[yellow]usage: /schedule add TEXT[/yellow]")
                 else:
-                    console.print("[bold cyan]alan>[/bold cyan] ", end="")
-                    console.print(alan.ask(request))
+                    try:
+                        console.print("[bold cyan]alan>[/bold cyan] ", end="")
+                        console.print(alan.ask(request))
+                    except Exception as exc:  # the chat loop must survive an ask
+                        console.print(f"\n[red]error: {type(exc).__name__}: {exc}[/red]\n")
             elif rest.split(" ", 1)[0] == "cancel" and " " in rest:
                 target = rest.split(" ", 1)[1].strip()
                 result = alan.runtime.registry.invoke("schedule.remove", {"match": target})
@@ -610,6 +622,8 @@ def chat(
             console.print("\n")
         except ProviderError as exc:
             console.print(f"\n[red]{exc}[/red]\n")
+        except Exception as exc:  # one bad tool/model call must not end the chat
+            console.print(f"\n[red]error: {type(exc).__name__}: {exc}[/red]\n")
 
     alan.stop_scheduler()
     alan.stop_telegram()
@@ -826,6 +840,7 @@ def doctor() -> None:
             f"memory:   {status['memory']['backend'] or 'none'} - {status['memory']['note']}\n"
             f"browser:  {status['browser']['provider'] or 'none'} - {status['browser']['note']}\n"
             f"internet: {status['internet']['provider'] or 'none'} - {status['internet']['note']}\n"
+            f"vibecoder: {status['vibecoder']}\n"
             f"telegram: {status['telegram']['chat_id'] or 'none'} - {status['telegram']['note']}\n"
             f"tools:    {len(status['tools'])} registered\n"
             f"agents:   {', '.join(status['agents'])}\n"
@@ -1065,7 +1080,13 @@ def serve(
     console.print(f"[green]alan serving[/green] ({on}) -- Ctrl+C to stop")
     try:
         if seconds > 0:
-            time.sleep(min(seconds, 3600.0))
+            # Sleep in capped chunks so a long `--seconds` still notices
+            # Ctrl+C promptly. One uneapped sleep of e.g. 7200s would make
+            # Ctrl+C wait up to an hour; capping restores responsiveness.
+            remaining = float(seconds)
+            while remaining > 0:
+                time.sleep(min(remaining, 3600.0))
+                remaining -= 3600.0
         else:
             while True:
                 time.sleep(0.5)

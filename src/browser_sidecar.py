@@ -770,17 +770,6 @@ async def act_open(url: str, timeout: float) -> dict[str, Any]:
     }
 
 
-async def act_navigate(url: str) -> dict[str, Any]:
-    page = await _current_page()
-    await page.goto(url)
-    content = await _await_text(page)
-    return {
-        "content": content,
-        **(await _page_info(page)),
-        "data": {"chars": len(content)},
-    }
-
-
 async def act_search(query: str, engine: str = "", top_k: int = 8) -> dict[str, Any]:
     """Search, falling through the engine list before giving up.
 
@@ -1085,7 +1074,6 @@ def _browser_name() -> str:
 
 def _graceful_exit() -> None:
     """Close the browser, then end the process. Used by ``POST /shutdown``."""
-    global _SERVER
     time.sleep(0.2)  # let the response reach the caller first
     try:
         if _SERVER is not None:
@@ -1133,7 +1121,6 @@ def _install_shutdown_handlers(server: Any) -> None:
 
 def _shutdown_now() -> None:
     """Stop the browser from a context that cannot await."""
-    global _SESSION
     if _SESSION is None:
         return
     try:

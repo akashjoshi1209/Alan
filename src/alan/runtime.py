@@ -26,7 +26,6 @@ from .core.planner import HeuristicPlanner
 from .core.scheduler import LocalRunner, ScheduleStore, Scheduler
 from .interfaces.capabilities import BrowserProvider
 from .interfaces.memory import MemoryProvider
-from .interfaces.model import ModelProvider
 from .interfaces.model import as_model_provider
 from .interfaces.types import PermissionRequest, RiskLevel, ToolSpec
 from .llm import _construct, known_providers
@@ -76,6 +75,7 @@ class AlanRuntime:
     model_note: str = ""
     browser_note: str = ""
     internet_note: str = ""
+    vibecoder_note: str = ""
     trace_path: Path | None = None
     _closeables: list[Any] = field(default_factory=list)
 
@@ -112,6 +112,11 @@ class AlanRuntime:
                 {"provider": "internet", "note": self.internet_note}
                 if self.internet
                 else {"provider": None, "note": self.internet_note}
+            ),
+            "vibecoder": (
+                self.vibecoder_note.removeprefix("vibecoder: ")
+                if self.vibecoder_note
+                else "not registered"
             ),
             "telegram": (
                 {
@@ -477,6 +482,8 @@ def build_runtime(
             _register_coding_tools(registry, coding)
         vibecoder_note = _register_vibecoder_tools(registry, settings)
         closeables.append(registry)
+    else:
+        vibecoder_note = ""
 
     orchestrator = Orchestrator(
         router,
@@ -539,6 +546,7 @@ def build_runtime(
         browser_note=browser_note,
         internet_note=internet_note,
         trace_path=trace_path,
+        vibecoder_note=vibecoder_note,
     )
     runtime._closeables = closeables
     if memory is not None:

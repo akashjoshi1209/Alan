@@ -36,6 +36,23 @@ from .memory.providers import build_memory_provider
 from .runtime import AlanRuntime, build_runtime
 
 
+def session_path(name: str) -> Path:
+    """A session file live inside ``SESSION_DIR``, rejecting anything else.
+
+    ``name`` is a bare session name (no separators, no dots, no absolute path).
+    Every field in ``data/sessions`` is a file created by ``save_session``, so a
+    name like ``../secrets`` or ``C:\\Windows\\x`` is a mistake, not a feature:
+    sessions are not a general file reader.
+    """
+    if not isinstance(name, str) or not name.strip():
+        raise ValueError("empty session name")
+    clean = name.strip()
+    base = Path(clean).name
+    if base != clean or base in (".", "..", ""):
+        raise ValueError(f"invalid session name {name!r}")
+    return SESSION_DIR / f"{base}.json"
+
+
 class Alan:
     """A stateful chat assistant bound to one orchestrator."""
 
@@ -225,16 +242,19 @@ class Alan:
 
         reply = "".join(parts)
         self._remember(text, reply)
-        self._store_memory(
-            self.runtime.orchestrator.store_turn(
+        try:
+            writes = self.runtime.orchestrator.store_turn(
                 text, reply, session_id=self.session_id, remember=remember
             )
-        )
+        except Exception:
+            # The reply already went out; a failed memory decision must not
+            # turn into a failed turn on top of it.
+            writes = []
+        self._store_memory(writes)
 
     # -- persistence -----------------------------------------------------
     def save_session(self, name: str | None = None) -> Path:
-        name = name or f"{self.session_id}"
-        path = SESSION_DIR / f"{name}.json"
+        path = session_path(name or f"{self.session_id}")
         path.parent.mkdir(parents=True, exist_ok=True)
         payload = {
             "session_id": self.session_id,
@@ -248,7 +268,19 @@ class Alan:
         return path
 
     def load_session(self, path: str | Path) -> None:
-        data = json.loads(Path(path).read_text(encoding="utf-8"))
+        target = Path(path)
+        if not target.is_absolute():
+            target = SESSION_DIR / target
+        root = SESSION_DIR.resolve()
+        try:
+            resolved = target.resolve()
+        except OSError as exc:
+            raise ValueError(f"cannot resolve session path {path!r}: {exc}") from exc
+        if root != resolved and root not in resolved.parents:
+            raise ValueError(
+                f"session file must live in {SESSION_DIR}, got {resolved}"
+            )
+        data = json.loads(resolved.read_text(encoding="utf-8"))
         self.history = list(data.get("messages", []))
         self.session_id = data.get("session_id", self.session_id)
         if data.get("system"):

@@ -484,7 +484,7 @@ class StandardTools(ToolProvider):
                 # fetch carried. The gate still treats web.open the same way.
                 try:
                     text = self.internet.read(target)
-                except Exception as exc:
+                except Exception:
                     if self.browser is None:
                         raise
                     return self._browser_open(target)

@@ -34,7 +34,7 @@ import subprocess
 import sys
 import urllib.parse
 from dataclasses import dataclass, field
-from typing import Any, Callable, Sequence
+from typing import Callable, Sequence
 
 from ..core.probecache import forget_key, probe_reason
 
@@ -177,7 +177,7 @@ class ExaSearch:
         ]
         try:
             raw = self._runner(argv, timeout)
-        except InternetUnavailable as exc:
+        except InternetUnavailable:
             # A probe that said "ready" was wrong: forget it so the next
             # report is truthful.
             forget_key(f"internet|exa|{self.mcporter}")
@@ -260,7 +260,7 @@ class JinaReader:
         ]
         try:
             text = self._runner(argv, timeout + 5.0)
-        except InternetUnavailable as exc:
+        except InternetUnavailable:
             forget_key(f"internet|jina|{self.curl}")
             raise
         if not text.strip():

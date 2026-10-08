@@ -33,7 +33,7 @@ from __future__ import annotations
 import hashlib
 import json
 import threading
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional
 
 from ..core.events import EventBus, Events

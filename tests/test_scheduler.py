@@ -227,6 +227,26 @@ class TestScheduleStore(unittest.TestCase):
             # "bad" fails to convert its spacing; both neighbours survive.
             self.assertEqual([t.id for t in store.list()], ["ok", "ok2"])
 
+    def test_non_dict_run_entries_are_dropped_on_load(self) -> None:
+        # `/activity --history` and `schedule show` call ``run.get(...)`` on
+        # every entry. A hand-edited or older store must not take those down.
+        task = ScheduledTask.from_dict(
+            {
+                "id": "tsk_a",
+                "request": "x",
+                "runs": [
+                    {"ok": True, "at": "2026-10-08T10:00:00"},
+                    7,
+                    "junk",
+                    None,
+                    {"ok": False, "error": "boom"},
+                ],
+            }
+        )
+        self.assertEqual(
+            [r.get("ok") for r in task.runs], [True, False]
+        )
+
 
 class TestSchedulerAuthoring(unittest.TestCase):
     def test_add_requires_a_request(self) -> None:

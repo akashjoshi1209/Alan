@@ -33,7 +33,6 @@ from typing import Any
 
 import requests
 
-from ...config import DATA_DIR
 from ...interfaces.capabilities import BrowserProvider, BrowserResult
 
 #: Where the sidecar listens. Deliberately not 8012 (cognee) or the Ollama

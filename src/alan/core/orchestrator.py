@@ -28,19 +28,18 @@ Design rules that matter:
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Callable, Sequence
 
 from ..interfaces.agent_runtime import Agent, AgentContext, AgentRuntime
 from ..interfaces.memory import MemoryProvider
-from ..interfaces.model import ModelCategory, UnavailableModel
+from ..interfaces.model import UnavailableModel
 from ..interfaces.types import (
     AgentResult,
     MemoryItem,
     MemoryLevel,
     MemoryType,
     PermissionRequest,
-    RiskLevel,
 )
 from ..models.router import ModelRouter, NoModelAvailable, RoutingRequest
 from ..permissions.gate import PermissionGate

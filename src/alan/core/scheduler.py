@@ -394,7 +394,11 @@ class ScheduledTask:
             max_runs=int(raw.get("max_runs", 0) or 0),
             last_run_at=str(raw.get("last_run_at", "")),
             blocked_by=str(raw.get("blocked_by", "")),
-            runs=list(raw.get("runs", []) or []),
+            # Runs are read by `/activity --history` and `schedule show`, which
+            # call ``run.get(...)`` on every entry. A corrupt store (hand-edited,
+            # an older format) that holds non-dicts must not take the whole
+            # scheduler down with it.
+            runs=[r for r in (raw.get("runs") or []) if isinstance(r, dict)],
         )
         if not task.request:
             raise ValueError("scheduled task has no request")

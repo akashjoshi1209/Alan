@@ -172,6 +172,28 @@ class TestConfiguration(unittest.TestCase):
         self.assertIn("shell.execute", settings.permissions.deny)
         self.assertTrue(settings.tools.execution)
 
+    def test_quoted_boolean_strings_do_not_invert(self) -> None:
+        from alan.config import _as_bool
+
+        # ``bool("false")`` is True; an accidentally quoted setting used to
+        # silently turn a security switch on. A string is now interpreted.
+        self.assertFalse(_as_bool("false", "x"))
+        self.assertFalse(_as_bool("off", "x"))
+        self.assertTrue(_as_bool("true", "x"))
+        self.assertTrue(_as_bool("yes", "x"))
+
+    def test_a_bad_boolean_refuses_to_load(self) -> None:
+        from alan.config import _as_bool
+
+        with self.assertRaises(ValueError):
+            _as_bool("maybe", "permissions.auto_confirm")
+
+    def test_bad_boolean_in_a_table_is_loud_not_silent(self) -> None:
+        from alan.config import _apply_tables
+
+        with self.assertRaises(ValueError):
+            _apply_tables(Settings(), {"permissions": {"auto_confirm": "maybe"}})
+
 
 # --------------------------------------------------------------------------
 # 2. Memory hierarchy, retrieval and honesty

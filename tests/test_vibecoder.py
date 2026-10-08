@@ -21,7 +21,7 @@ from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from alan.config import HOME  # noqa: E402
+from alan.config import HOME, load_settings  # noqa: E402
 from alan.tools.vibecoder import (  # noqa: E402
     MAX_TRANSCRIPT_CHARS,
     FileChange,
@@ -653,6 +653,36 @@ class RefusalTest(unittest.TestCase):
             any("did not write any code" in w for w in result.warnings),
             "the report must say Alan's own model did not quietly do the work",
         )
+
+
+class StatusNoteTest(unittest.TestCase):
+    """``vibecoder_note`` used to be computed in ``build_runtime`` and then
+    dropped, so ``alan doctor`` could not tell an operator whether Alan could
+    code. The note is now carried on the runtime and surfaced in ``status()``."""
+
+    def test_build_runtime_carries_the_registration_note(self):
+        from alan.runtime import build_runtime
+
+        with mock.patch(
+            "alan.runtime._register_vibecoder_tools",
+            return_value="vibecoder: stubbed reason",
+        ):
+            runtime = build_runtime(load_settings(), register_tools=True)
+        try:
+            self.assertEqual(runtime.vibecoder_note, "vibecoder: stubbed reason")
+            # The status line strips the redundant prefix for display.
+            self.assertEqual(runtime.status()["vibecoder"], "stubbed reason")
+        finally:
+            runtime.close()
+
+    def test_status_says_not_registered_when_tools_are_off(self):
+        from alan.runtime import build_runtime
+
+        runtime = build_runtime(load_settings(), register_tools=False)
+        try:
+            self.assertEqual(runtime.status()["vibecoder"], "not registered")
+        finally:
+            runtime.close()
 
 
 if __name__ == "__main__":

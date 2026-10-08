@@ -19,7 +19,7 @@ FORBIDDEN stays dead and nothing exceeds ``ceiling``. See rules.py for why.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Callable, Sequence
+from typing import Callable
 
 from ..interfaces.types import (
     PermissionDecision,

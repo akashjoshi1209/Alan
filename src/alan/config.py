@@ -9,6 +9,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 try:  # Python 3.11+
     import tomllib
@@ -398,6 +399,30 @@ def load_settings() -> Settings:
     return _apply_tables(settings, raw)
 
 
+_TRUE_WORDS = {"true", "yes", "on", "1"}
+_FALSE_WORDS = {"false", "no", "off", "0"}
+
+
+def _as_bool(value: Any, key: str) -> bool:
+    """Coerce a TOML boolean, tolerating quoted spellings, loudly otherwise.
+
+    ``bool("false")`` is ``True``, so a hand-edited ``enabled = "false"``
+    (accidentally quoted) silently inverted a security setting. A real TOML
+    boolean always exists by the time we get here; a string is accepted only in
+    an obvious spelling, and anything else refuses to load rather than doing the
+    wrong thing all session.
+    """
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        word = value.strip().lower()
+        if word in _TRUE_WORDS:
+            return True
+        if word in _FALSE_WORDS:
+            return False
+    raise ValueError(f"{key} must be true or false (got {value!r})")
+
+
 def _apply_tables(settings: Settings, raw: dict) -> Settings:
     """Overlay the optional ``[memory]``, ``[permissions]``, ``[scheduler]``,
     ``[telegram]``, ``[tools]``, ``[browser]`` and ``[vibecoder]`` tables.
@@ -408,14 +433,16 @@ def _apply_tables(settings: Settings, raw: dict) -> Settings:
     mem = raw.get("memory", {})
     if mem:
         m = settings.memory
-        m.enabled = bool(mem.get("enabled", m.enabled))
+        m.enabled = _as_bool(mem.get("enabled", m.enabled), "memory.enabled")
         m.backend = str(mem.get("backend", m.backend))
         m.base_url = str(mem.get("base_url", m.base_url))
         m.dataset = str(mem.get("dataset", m.dataset))
         m.top_k = int(mem.get("top_k", m.top_k))
         m.max_context_tokens = int(mem.get("max_context_tokens", m.max_context_tokens))
-        m.auto_recall = bool(mem.get("auto_recall", m.auto_recall))
-        m.auto_remember = bool(mem.get("auto_remember", m.auto_remember))
+        m.auto_recall = _as_bool(mem.get("auto_recall", m.auto_recall), "memory.auto_recall")
+        m.auto_remember = _as_bool(
+            mem.get("auto_remember", m.auto_remember), "memory.auto_remember"
+        )
         m.fallback = str(mem.get("fallback", m.fallback))
         m.mem0_model = str(mem.get("mem0_model", m.mem0_model))
         m.mem0_embedder = str(mem.get("mem0_embedder", m.mem0_embedder))
@@ -435,8 +462,12 @@ def _apply_tables(settings: Settings, raw: dict) -> Settings:
     if perms:
         p = settings.permissions
         p.ceiling = str(perms.get("ceiling", p.ceiling))
-        p.auto_confirm = bool(perms.get("auto_confirm", p.auto_confirm))
-        p.local_only = bool(perms.get("local_only", p.local_only))
+        p.auto_confirm = _as_bool(
+            perms.get("auto_confirm", p.auto_confirm), "permissions.auto_confirm"
+        )
+        p.local_only = _as_bool(
+            perms.get("local_only", p.local_only), "permissions.local_only"
+        )
         p.deny = tuple(str(x) for x in perms.get("deny", p.deny))
         raw_rules = perms.get("rules", ())
         if raw_rules:
@@ -457,27 +488,29 @@ def _apply_tables(settings: Settings, raw: dict) -> Settings:
     sched = raw.get("scheduler", {})
     if sched:
         s = settings.scheduler
-        s.enabled = bool(sched.get("enabled", s.enabled))
+        s.enabled = _as_bool(sched.get("enabled", s.enabled), "scheduler.enabled")
         s.tick_seconds = float(sched.get("tick_seconds", s.tick_seconds))
         s.task_timeout = float(sched.get("task_timeout", s.task_timeout))
 
     tg = raw.get("telegram", {})
     if tg:
         t = settings.telegram
-        t.enabled = bool(tg.get("enabled", t.enabled))
+        t.enabled = _as_bool(tg.get("enabled", t.enabled), "telegram.enabled")
         t.bot_token = str(tg.get("bot_token", t.bot_token))
         t.chat_id = str(tg.get("chat_id", t.chat_id))
         t.long_poll = float(tg.get("long_poll", t.long_poll))
         t.retry_seconds = float(tg.get("retry_seconds", t.retry_seconds))
-        t.notify_tasks = bool(tg.get("notify_tasks", t.notify_tasks))
+        t.notify_tasks = _as_bool(
+            tg.get("notify_tasks", t.notify_tasks), "telegram.notify_tasks"
+        )
 
     tools = raw.get("tools", {})
     if tools:
         t = settings.tools
-        t.execution = bool(tools.get("execution", t.execution))
-        t.browser = bool(tools.get("browser", t.browser))
-        t.coding = bool(tools.get("coding", t.coding))
-        t.internet = bool(tools.get("internet", t.internet))
+        t.execution = _as_bool(tools.get("execution", t.execution), "tools.execution")
+        t.browser = _as_bool(tools.get("browser", t.browser), "tools.browser")
+        t.coding = _as_bool(tools.get("coding", t.coding), "tools.coding")
+        t.internet = _as_bool(tools.get("internet", t.internet), "tools.internet")
         t.include = tuple(str(x) for x in tools.get("include", t.include))
 
     browser = raw.get("browser", {})
@@ -485,7 +518,9 @@ def _apply_tables(settings: Settings, raw: dict) -> Settings:
         b = settings.browser
         b.base_url = str(browser.get("base_url", b.base_url))
         b.timeout = float(browser.get("timeout", b.timeout))
-        b.allow_download = bool(browser.get("allow_download", b.allow_download))
+        b.allow_download = _as_bool(
+            browser.get("allow_download", b.allow_download), "browser.allow_download"
+        )
 
     return settings
 
