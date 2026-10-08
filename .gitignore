@@ -1,0 +1,28 @@
+# Runtime data and downloaded assets - not source
+data/
+models/
+env/
+config/.env
+
+# Runtime knowledge graph and session state
+.ua/
+
+# Test and tool caches
+.pytest_cache/
+
+# Session scratch files (from local-system probing)
+cognee-install.log
+a.txt
+test_localsystem.txt
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+
+# Editor / OS
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini

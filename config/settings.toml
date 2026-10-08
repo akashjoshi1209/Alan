@@ -1,0 +1,312 @@
+# Alan configuration
+# ---------------------------------------------------------------------------
+# provider: "auto" registers every backend that has a key or is running, in
+# this order:
+#   openai -> anthropic -> groq -> openrouter -> ollama
+# Set it to a specific name to force one backend.
+#
+# That order only breaks ties. Which model actually answers is decided by
+# priority:
+#
+#   priority    Lower wins; 0 = preferred. Cloud providers ship at 0 and the
+#               local model at 10, which is what makes a key you add to
+#               config/.env actually get used. Set them equal to return to
+#               local-first routing.
+#   categories  What the model is good at: fast, reasoning, coding, vision,
+#               embedding, general. Omit it to infer from the model name --
+#               which guesses, and guesses the same for "gpt-4o-mini" and a 1.5B
+#               local model, so the router cannot tell a coding specialist from
+#               a chat model. Stating them here is what separates them.
+#
+# None of this overrides privacy: a request that touches memory or facts about
+# you stays on this machine whatever the priorities say (see [permissions]
+# local_only).
+# ---------------------------------------------------------------------------
+
+[alan]
+name = "Alan"
+provider = "auto"
+system_prompt = "You are Alan, a helpful, concise, and friendly AI assistant. Answer clearly and get to the point."
+temperature = 0.7
+max_tokens = 1024
+
+[openai]
+model = "gpt-4o-mini"
+base_url = ""
+priority = 0
+categories = ["general", "fast", "coding"]
+
+[anthropic]
+model = "claude-3-5-sonnet-latest"
+base_url = ""
+priority = 0
+categories = ["general", "fast", "coding"]
+
+# Cheapest and fastest of the configured backends; needs GROQ_API_KEY.
+# Endpoint and model verified live while wiring this up: GET /models returned
+# 200 with qwen/qwen3.8-27b present, and a completion through the same client
+# Alan uses came back. Note the raw probe must send a browser User-Agent --
+# Cloudflare returns 1010 for urllib's default one, which reads exactly like a
+# dead key.
+[groq]
+model = "qwen/qwen3.8-27b"
+base_url = "https://api.groq.com/openai/v1"
+priority = 0
+categories = ["general", "fast", "coding"]
+
+# One key reaches many models; ids are "vendor/name". Needs OPENROUTER_API_KEY.
+# Verified live: GET /models returned 200 with 464 models.
+[openrouter]
+model = "openai/gpt-4o-mini"
+base_url = "https://openrouter.ai/api/v1"
+priority = 0
+categories = ["general", "fast", "coding"]
+
+[ollama]
+model = "qwen2.5:1.5b"
+base_url = "http://127.0.0.1:11435"
+# 10 rather than 0: this is a 1.5B model, so it ranks below any cloud you
+# configure and does not claim `coding`. It still answers everything when it is
+# the only backend running -- priority orders the candidates, it does not
+# exclude them.
+priority = 10
+categories = ["general", "fast"]
+
+# Local inference tuning.
+#
+#   num_ctx     KV-cache window. Every doubling costs memory whether or not a
+#               prompt gets that long. Measured on a 4 GB / 2-core machine,
+#               4096 left ~0.1 GB free, which evicted the model mid-answer and
+#               cost far more than the context was ever worth. Raise it if you
+#               feed Alan long files and have RAM to spare; 0 = Ollama default.
+#   keep_alive  How long Ollama holds the model in RAM. A chat turn pauses while
+#               the user reads and types, and Ollama's 5-minute default means
+#               the next turn sometimes pays a ~12 s model reload.
+num_ctx = 2048
+keep_alive = "30m"
+
+[memory]
+# Which backend to use, and what to fall back to when it is unreachable.
+#
+#   backend: auto | cognee | mem0 | json | none
+#     auto   -> cognee when the sidecar answers, otherwise the JSON store
+#     cognee -> the local sidecar started by scripts/cognee-serve.ps1
+#     mem0   -> semantic memory over a local vector store (optional dependency)
+#     json   -> the dependency-free local store
+#     none   -> no memory at all
+#
+# The fallback is not a nicety: on a portable drive the sidecar being down is a
+# normal state, not an exception, and Alan must keep working.
+enabled = true
+backend = "auto"
+base_url = "http://127.0.0.1:8012"
+dataset = "alan"
+top_k = 5
+max_context_tokens = 512
+auto_recall = true
+auto_remember = true
+fallback = "json"
+
+# mem0 settings. Unused unless backend = "mem0". mem0's extraction model runs
+# on Alan's bundled Ollama, so this stays keyless and offline.
+mem0_model = "qwen2.5:1.5b"
+mem0_embedder = "BAAI/bge-small-en-v1.5"
+mem0_base_url = "http://127.0.0.1:11435"
+mem0_store_path = ""
+
+[permissions]
+# ceiling: the highest risk any agent may reach. SAFE < LOW_RISK < MEDIUM_RISK <
+# HIGH_RISK < PRIVILEGED. This is the operator's setting and no agent, plan or
+# prompt can raise it.
+#
+# HIGH_RISK brings in exactly three capabilities: filesystem.delete,
+# browser.open and browser.click. All three set requires_confirmation, so each
+# individual call still asks you -- raising the ceiling widens what may be
+# *requested*, not what may happen unattended. PRIVILEGED stays unreachable and
+# the FORBIDDEN set stays refused either way.
+#
+# It is also what makes web.open usable at all: the research agent declares
+# medium_risk while holding web.open, which is high_risk, so at the old ceiling
+# that tool could never run and the two settings contradicted each other.
+ceiling = "high_risk"
+
+# auto_confirm = true lets Alan satisfy confirmation prompts itself. Leave it
+# false: it is the difference between "ask me" and "just do it".
+auto_confirm = false
+
+# local_only = true keeps user facts and memory operations on this machine.
+# When it is true and no local model is running, Alan refuses those requests
+# rather than sending your memory to a cloud API, and says why. Set it to false
+# only if you have decided that a cloud model may see them; the model itself
+# cannot ask for this.
+local_only = true
+
+# Capabilities to refuse outright, whatever the ceiling. Capability names match
+# the tool names shown by `alan tools`, e.g. "shell.execute".
+deny = []
+
+# [[permissions.rules]] = operator rules layered on top of the ceiling.
+# Each rule names an action class and an effect:
+#
+#   allow  -> never ask for this exact action (still subject to `ceiling` and
+#             to the FORBIDDEN set; a rule can never reach either)
+#   ask    -> always ask before this action runs, even when the tier would
+#             not have required it
+#   block  -> always denied
+#
+# Patterns: an exact capability ("shell.execute"), a namespace ("shell.*"), a
+# bare namespace ("shell"), or "*" for every capability. Last match wins.
+#
+# Rules exist because the tiers are coarse: "web.open is high risk, ask me" is
+# right for a stranger's machine and wrong for a URL on your own drive at home.
+# Uncomment and adjust to taste:
+#
+# [[permissions.rules]]
+# capability = "shell.*"
+# effect = "block"
+#
+# [[permissions.rules]]
+# capability = "schedule.*"
+# effect = "ask"
+
+[tools]
+# Every capability is opt-in. Alan ships with local execution and browser
+# automation switched off; a portable assistant that can rewrite itself on an
+# unknown machine is not a portable assistant.
+#
+# browser = true wires web.search and web.open to the sidecar. It does not start
+# one: with the sidecar down the tools report how to start it rather than
+# failing vaguely, and `alan doctor` shows the state. Nothing is fetched until a
+# tool is actually called and the permission gate has approved it.
+execution = false
+browser = true
+coding = false
+
+# internet = true wires web.search and web.open to the zero-config agent-reach
+# backends (Exa search via mcporter, Jina Reader via curl). These are used
+# first when available; the browser sidecar remains the fallback and the only
+# path for page interaction. No key, no sidecar, nothing to start.
+internet = true
+
+# Namespaces to register from the built-in tool set.
+include = ["filesystem", "shell", "web", "memory", "system"]
+
+[browser]
+# The browser is a separate process in a separate environment, because
+# browser-use pins its dependencies with `==` and those conflict with Alan's
+# (ADR-003). Alan talks to it over loopback HTTP and nothing else.
+#
+# Start it with:  scripts\browser-serve.ps1
+#
+# No browser is ever downloaded. The sidecar drives the Chrome already
+# installed on the host, or Edge.
+base_url = "http://127.0.0.1:8022"
+
+# Ceiling for a single browser request, in seconds. Enforced on both sides.
+timeout = 60.0
+
+[scheduler]
+# Always-on background tasks (Phase 1).
+#
+#   enabled      false builds no scheduler at all: no thread, no state file,
+#                and /activity says so. The loop only runs while an `alan
+#                chat` session is open -- a chat owns it, scripts do not.
+#   tick_seconds how often the loop looks for due work.
+#   task_timeout  wall-clock ceiling for one run. A run that exceeds it is
+#                recorded as failed and the loop continues; the abandoned
+#                worker finishes in the background, results discarded.
+#
+# Concurrency is deliberately NOT configurable: one task at a time, always.
+# That is the Grok-Bot lesson -- a bot that re-applies itself in a loop nobody
+# can stop -- made structural instead of a setting that can be turned off.
+enabled = true
+tick_seconds = 5.0
+task_timeout = 600.0
+
+[telegram]
+# Approvals on your phone (Phase 4). A scheduled task that stops at the
+# permission gate waits for a human; this bridge makes that human reachable.
+# It long-polls the Telegram Bot API -- Alan dials OUT, Telegram never calls
+# back in, so nothing on this network opens a port and the stick stays
+# offline-first.
+#
+#   bot_token  from @BotFather. LEAVE EMPTY to disable the bridge entirely.
+#   chat_id    the ONLY chat that may decide (/approve, /reject). Any other
+#              sender is ignored, silently. Message your bot once, then read
+#              the id from Telegram's getUpdates to find yours.
+#   long_poll  seconds each poll waits for a message (Telegram caps ~50).
+#   retry_seconds  pause after a network error.
+#
+# The token is a secret: do not commit it. A leaked token only ever reaches
+# the chat it is sent to, and only this chat's decisions are obeyed.
+enabled = true
+bot_token = ""
+chat_id = ""
+long_poll = 20.0
+retry_seconds = 3.0
+# Also announce task start / finish / failure to the chat, so the phone is a
+# place *results* reach you, not just decisions. A task stopped at the
+# permission gate is not repeated here -- its approval message already carries
+# the /approve instruction.
+notify_tasks = true
+
+[vibecoder]
+# Vibecoder writes the code; Alan plans, delegates and reports. Anything that
+# changes code is handed here rather than being written by Alan's own model,
+# which is a 1.5b local one and cannot be trusted to produce a correct edit.
+#
+# provider is passed to Vibecoder as `--provider`. The flag is narrower than
+# it looks, and the difference is not cosmetic:
+#
+#   Vibecoder runs a HYBRID router that classifies every task as chat or heavy.
+#   `--provider` (and `--model`) only set the CHAT route. A coding task is
+#   classified heavy and served by routing.heavyProvider, which the built-in
+#   defaults pin to nvidia. So setting this to groq alone does NOT move coding
+#   off NVIDIA -- verified: with provider = "groq" and no override in place, a
+#   "fix math.js" delegation still ran nvidia/nemotron-3-ultra-550b-a55b and
+#   reported exit 0.
+#
+# Coding's actual route is pinned in ~/.vibecoder/config.json, which Vibecoder
+# deep-merges over its built-in defaults. Only `routing` lives in that file, so
+# it stays valid across Vibecoder updates, and deleting it restores NVIDIA.
+#
+# Measured on this machine with heavy = groq/qwen/qwen3.8-27b:
+#   - real edit (glob + read_file + edit_file) completes and verifies on disk
+#   - cost $0.0000 and reliable
+#   - ~122 s: groq's free tier allows ~8,000 tokens/min and the task consumed
+#     ~20k input tokens across 4 requests. Per-request latency is 0.3-0.5 s, so
+#     the wait is rate limiting, not model slowness. It is the same budget on
+#     every groq model, so no model swap avoids it.
+#   - nvidia ran ~10-15 s when it worked, but failed 3 of 4 attempts with a
+#     silent exit-0 no-op, so it is not the safe default.
+#
+#   groq    free and reliable (this setting's choice; needs GROQ_API_KEY,
+#           already present in ~/.vibecoder/.env)
+#   nvidia  faster, costs per token, flaky on this machine
+#   ollama  local, no cost, weakest
+provider = "groq"
+
+# Empty means "find vibecoder on PATH". A path set here is honoured EXCLUSIVELY:
+# a typo reports the tool as not installed rather than silently running some
+# other binary and reporting its results as if they came from this one.
+launcher = ""
+
+# Where work happens when a request names no directory. LEFT EMPTY on purpose.
+#
+# Empty means "use the directory Alan is running in", which is what someone who
+# runs `alan ask "fix the failing test"` inside a project means. Pin it to an
+# absolute path to override that.
+#
+# Do NOT point this at D:\Alan. That is Alan's own source, and delegating there
+# would let the agent rewrite the harness that reports on it -- including the
+# code that verifies its work, which is a one-shot way to make every future
+# report say "all done". The tool refuses that directory for this reason.
+project_dir = ""
+
+# Below Vibecoder's documented default of 40, so a runaway task is bounded while
+# a real read-inspect-edit-test still fits.
+max_steps = 25
+
+# Wall-clock ceiling for one delegation. Observed: ~7s for a read-only task,
+# ~23s for a small edit. 900 is generous for interactive use.
+timeout = 900.0

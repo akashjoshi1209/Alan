@@ -1,0 +1,46 @@
+{
+  "acquired_utc": "auto",
+  "repositories": [
+    { "name": "llama.cpp",            "category": "inference",     "url": "https://github.com/ggml-org/llama.cpp.git",                          "priority": "CRITICAL",      "kind": "inference engine" },
+    { "name": "ollama",               "category": "inference",     "url": "https://github.com/ollama/ollama.git",                                "priority": "CRITICAL",      "kind": "model serving" },
+
+    { "name": "pydantic-ai",          "category": "agents",        "url": "https://github.com/pydantic/pydantic-ai.git",                          "priority": "CRITICAL",      "kind": "typed agent framework" },
+    { "name": "langgraph",            "category": "agents",        "url": "https://github.com/langchain-ai/langgraph.git",                        "priority": "HIGH",          "kind": "stateful orchestration" },
+    { "name": "agent-framework",      "category": "agents",        "url": "https://github.com/microsoft/agent-framework.git",                      "priority": "MEDIUM/HIGH",   "kind": "agent orchestration" },
+    { "name": "autogen",              "category": "agents",        "url": "https://github.com/microsoft/autogen.git",                            "priority": "LOW/MEDIUM",    "kind": "multi-agent (maintenance mode)" },
+
+    { "name": "letta-code",           "category": "memory",        "url": "https://github.com/letta-ai/letta-code.git",                          "priority": "CRITICAL",      "kind": "stateful agents + memory" },
+    { "name": "letta",                "category": "memory",        "url": "https://github.com/letta-ai/letta.git",                              "priority": "CRITICAL",      "kind": "historical Letta" },
+    { "name": "mem0",                 "category": "memory",        "url": "https://github.com/mem0ai/mem0.git",                                 "priority": "CRITICAL",      "kind": "persistent memory" },
+    { "name": "graphiti",             "category": "memory",        "url": "https://github.com/getzep/graphiti.git",                             "priority": "CRITICAL",      "kind": "temporal knowledge graph" },
+    { "name": "supermemory",          "category": "memory",        "url": "https://github.com/supermemoryai/supermemory.git",                    "priority": "CRITICAL",      "kind": "memory + context + RAG" },
+    { "name": "memlocal_core",        "category": "memory",        "url": "https://github.com/memlocal/memlocal_core.git",                      "priority": "HIGH",          "kind": "local-first memory engine" },
+
+    { "name": "lancedb",              "category": "knowledge",     "url": "https://github.com/lancedb/lancedb.git",                              "priority": "CRITICAL",      "kind": "embedded vector DB" },
+    { "name": "local-rag",            "category": "knowledge",     "url": "https://github.com/leestott/local-rag.git",                          "priority": "LOW/MEDIUM",    "kind": "small local RAG reference" },
+
+    { "name": "browser-use",          "category": "browser",       "url": "https://github.com/browser-use/browser-use.git",                      "priority": "CRITICAL",      "kind": "AI browser automation" },
+    { "name": "open-browser-use",     "category": "browser",       "url": "https://github.com/open-browser-use/open-browser-use.git",            "priority": "HIGH",          "kind": "control existing local browser" },
+
+    { "name": "OmniParser",           "category": "computer-use",  "url": "https://github.com/microsoft/OmniParser.git",                         "priority": "HIGH",          "kind": "screenshot -> UI structure" },
+
+    { "name": "scrcpy",               "category": "android",       "url": "https://github.com/Genymobile/scrcpy.git",                            "priority": "CRITICAL",      "kind": "Android display/control" },
+    { "name": "termux-api",           "category": "android",       "url": "https://github.com/termux/termux-api.git",                            "priority": "CRITICAL",      "kind": "Android device APIs to CLI" },
+    { "name": "vesta",                "category": "android",       "url": "https://github.com/RisorseArtificiali/vesta.git",                    "priority": "CRITICAL",      "kind": "offline Android assistant" },
+    { "name": "LocalMind",            "category": "android",       "url": "https://github.com/tk85457/LocalMind.git",                           "priority": "HIGH",          "kind": "Kotlin local-LLM assistant" },
+    { "name": "offline-ai-assistant", "category": "android",       "url": "https://github.com/its-hazratbilal/offline-ai-assistant.git",         "priority": "MEDIUM/HIGH",   "kind": "Android local-LLM assistant" },
+
+    { "name": "mcp-python-sdk",       "category": "protocols",     "url": "https://github.com/modelcontextprotocol/python-sdk.git",               "priority": "CRITICAL",      "kind": "MCP Python SDK" },
+
+    { "name": "litellm",              "category": "routing",       "url": "https://github.com/BerriAI/litellm.git",                            "priority": "HIGH",          "kind": "LLM abstraction + routing" },
+
+    { "name": "crewAI",               "category": "workflows",     "url": "https://github.com/crewAIInc/crewAI.git",                            "priority": "HIGH",          "kind": "agent crews + flows" },
+    { "name": "prefect",              "category": "workflows",     "url": "https://github.com/PrefectHQ/prefect.git",                           "priority": "HIGH",          "kind": "reliable workflow orchestration" },
+    { "name": "AutoGPT",              "category": "workflows",     "url": "https://github.com/Significant-Gravitas/AutoGPT.git",                "priority": "LOW/MEDIUM",    "kind": "autonomous agent (reference)" },
+
+    { "name": "uv",                   "category": "utilities",     "url": "https://github.com/astral-sh/uv.git",                                "priority": "HIGH",          "kind": "Python env + packaging" },
+
+    { "name": "BrowserGym",           "category": "evaluation",    "url": "https://github.com/ServiceNow/BrowserGym.git",                       "priority": "MEDIUM/HIGH",   "kind": "web-agent benchmark" },
+    { "name": "WindowsAgentArena",    "category": "evaluation",    "url": "https://github.com/microsoft/WindowsAgentArena.git",                  "priority": "MEDIUM",        "kind": "desktop computer-use benchmark" }
+  ]
+}

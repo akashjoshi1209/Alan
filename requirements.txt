@@ -1,0 +1,58 @@
+# Alan's Python dependencies
+# ---------------------------------------------------------------------------
+# Reproduces env\python, the portable environment the product runs on.
+#
+#   python -m pip install -r requirements.txt
+#
+# Every version is pinned with `==`. This is deliberate and it is the whole
+# reason the sidecars exist: an unpinned install resolves differently on
+# different days, and a portable assistant whose behaviour changes when you
+# rebuild it is not portable.
+#
+# SCOPE
+#   This file is Alan's MAIN environment only -- the provider layer, the CLI,
+#   the tool registry and the memory providers. Heavy or conflicting stacks are
+#   NOT installed here; they live in isolated sidecar environments:
+#
+#     env\cognee\python   cognee + CPU-only PyTorch   (scripts\setup-cognee.ps1)
+#     env\browser\python  browser-use 0.13            (scripts\setup-browser.ps1)
+#
+#   browser-use is the clearest case. It pins openai==2.26 and rich==14.3,
+#   which would downgrade the provider layer and the CLI below to satisfy a
+# capability that is off by default. Isolating it costs disk and buys a main
+# environment that does not move (ADR-003).
+#
+# MINIMAL INSTALL
+#   Everything above the "optional" line is needed for Alan to start. mem0 and
+#   pytest are not: memory falls back to the JSON store when mem0 is absent, and
+#   Alan runs its own suite on the standard library's unittest. Both are listed
+#   so a rebuild matches the environment that was actually verified.
+# ---------------------------------------------------------------------------
+
+# -- model providers ---------------------------------------------------------
+openai==3.24.0
+anthropic==1.11.0
+ollama==0.6.3
+
+# -- core --------------------------------------------------------------------
+pydantic==2.13.5
+requests==2.34.2
+httpx==0.28.1
+typing_extensions==4.16.0
+
+# -- command line ------------------------------------------------------------
+typer==0.27.2
+rich==15.0.0
+
+# -- optional: alternative memory backend ------------------------------------
+# Behind MemoryProvider. Selected with [memory] backend = "mem0". Points at the
+# bundled Ollama server, so it stays keyless and offline. Telemetry is forced
+# off in code (MEM0_TELEMETRY=False before import) because this is a portable
+# product that must not phone home. Without it, build_memory_provider falls back
+# to the JSON store and says so.
+mem0ai==2.2.1
+
+# -- optional: running OTHER projects' test suites ---------------------------
+# Alan's own 128 tests use stdlib unittest. pytest exists solely so code.test
+# can run a repository's suite during a coding task.
+pytest==9.1.1
