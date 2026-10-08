@@ -310,3 +310,35 @@ max_steps = 25
 # Wall-clock ceiling for one delegation. Observed: ~7s for a read-only task,
 # ~23s for a small edit. 900 is generous for interactive use.
 timeout = 900.0
+
+# -- ECC (github.com/affaan-m/ECC) -------------------------------------------
+# Local-first library of skills (workflow instructions), commands (prompt
+# templates) and agent personas, installed at vendor\ECC. Turning this on
+# adds three read-only tools -- skill.list, skill.search, skill.read -- and
+# one line to the system prompt so the model knows loading exists. The
+# planner loads an entry when a request names one ("use the X skill",
+# "/command"), or when every word of a multi-word entry name appears in a
+# plain request.
+#
+# Nothing here escapes the permission gate: the tools register through the
+# ordinary registry at SAFE risk, so the [permissions] rules below govern
+# them exactly like filesystem.* -- add a block rule on skill.* or ecc.* to
+# turn a whole namespace off again. No ECC hook is ported; its permission
+# auto-approve hook has no path into Alan (ADR-006).
+[ecc]
+# Master switch: catalog + skill.* tools + planner matching.
+enabled = true
+
+# The eight advisory dev tools (ecc.*): project detection, coverage reading,
+# secret scanning, git summaries. They analyse and PRINT commands -- they
+# never execute anything.
+devtools = true
+
+# Where ECC lives. Empty auto-detects: vendor\ECC first, then the OpenCode
+# install at ~/.config/opencode (ECC's official beta adapter).
+root = ""
+
+# Ceiling on skill text injected into one run, in characters. A 400-line
+# skill would otherwise fill a 2048-token local model's whole context
+# window; the rest stays reachable with `alan skills --read <name>`.
+max_chars = 4000

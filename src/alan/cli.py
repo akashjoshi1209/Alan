@@ -841,6 +841,7 @@ def doctor() -> None:
             f"browser:  {status['browser']['provider'] or 'none'} - {status['browser']['note']}\n"
             f"internet: {status['internet']['provider'] or 'none'} - {status['internet']['note']}\n"
             f"vibecoder: {status['vibecoder']}\n"
+            f"ecc:      {status['ecc']}\n"
             f"telegram: {status['telegram']['chat_id'] or 'none'} - {status['telegram']['note']}\n"
             f"tools:    {len(status['tools'])} registered\n"
             f"agents:   {', '.join(status['agents'])}\n"
@@ -882,6 +883,85 @@ def backends() -> None:
             row["detail"][:70],
         )
     console.print(table)
+
+
+@app.command()
+def skills(
+    query: List[str] = typer.Argument(None),
+    kind: str = typer.Option(
+        "", "--kind", help="Restrict to one family: skill, command or agent."
+    ),
+    read: str = typer.Option("", "--read", help="Print one entry's full content."),
+    limit: int = typer.Option(20, "--limit", min=1, max=300),
+) -> None:
+    """Browse the ECC library: list entries, search them, or read one.
+
+    Read-only and independent of the model stack -- this command builds the
+    catalog directly, so it works with no provider configured.
+    """
+    from .ecc import EccCatalog, find_ecc_root
+
+    settings = load_settings()
+    if not settings.ecc.enabled:
+        console.print(
+            "[yellow]ECC is off.[/yellow] "
+            "Set [ecc] enabled = true in config\\settings.toml."
+        )
+        raise typer.Exit(1)
+    root = find_ecc_root(settings.ecc.root)
+    if root is None:
+        console.print(
+            "[red]ECC not found.[/red] Clone "
+            "https://github.com/affaan-m/ECC to vendor\\ECC, or set [ecc] root."
+        )
+        raise typer.Exit(1)
+    catalog = EccCatalog.load(root)
+
+    if read:
+        entry = catalog.find(read)
+        if entry is None:
+            console.print(f"[red]no entry named[/red] {read!r}. Try: alan skills {read}")
+            raise typer.Exit(1)
+        console.print(f"[bold]{entry.ref}[/bold] - {entry.description}")
+        console.print(entry.content)
+        return
+
+    if query:
+        terms = " ".join(query)
+        hits = catalog.search(terms, kind=kind or None, limit=limit)
+        if not hits:
+            console.print(f"no ECC entries match {terms!r}.")
+            raise typer.Exit(1)
+        table = Table(title=f"ecc search: {terms}")
+        for column in ("ref", "description"):
+            table.add_column(column)
+        for entry in hits:
+            table.add_row(entry.ref, entry.description[:110])
+        console.print(table)
+        return
+
+    counts = catalog.counts()
+    console.print(
+        f"ecc: {counts['skill']} skills, {counts['command']} commands, "
+        f"{counts['agent']} agents from {root}"
+    )
+    listed = 0
+    for family in ("skill", "command", "agent"):
+        if kind and family != kind:
+            continue
+        names = [entry.name for entry in catalog.all(family)]
+        if not names:
+            console.print(f"{family}s: (none)")
+            continue
+        shown = names[:limit]
+        listed += len(shown)
+        line = ", ".join(shown)
+        if len(names) > len(shown):
+            line += f", ... and {len(names) - len(shown)} more"
+        console.print(f"{family}s ({len(names)}): {line}")
+    if not listed:
+        console.print(f"[red]no family named[/red] {kind!r} (skill, command, agent).")
+        raise typer.Exit(1)
 
 
 @app.command()

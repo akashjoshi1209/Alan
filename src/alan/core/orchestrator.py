@@ -93,6 +93,10 @@ _CAPABILITY_HANDLERS = {
     "schedule_add": "schedule.add",
     "schedule_list": "schedule.list",
     "schedule_remove": "schedule.remove",
+    # ECC skills: loading one is a plan step, not a model tool-call (Alan's
+    # model layer has none), so `skill.read` is reached only through this
+    # mapping -- and, like every tool, through the gate in the registry.
+    "load_skill": "skill.read",
 }
 
 #: Which observations carry the authoritative record of a delegation, in the form
@@ -991,6 +995,9 @@ def _allowed_for(plan: Plan) -> list[str]:
         "schedule": ["schedule.add", "schedule.list", "schedule.remove"],
         "schedule_list": ["schedule.list", "schedule.remove"],
         "schedule_remove": ["schedule.remove", "schedule.list"],
+        # A skill plan sees the loader plus the two discovery tools: the entry
+        # is usually already named, but a near-miss needs search to correct it.
+        "use_skill": ["skill.read", "skill.search", "skill.list"],
     }.get(plan.intent, [])
 
 

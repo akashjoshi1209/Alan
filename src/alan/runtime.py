@@ -24,6 +24,7 @@ from .core.events import EventBus, JsonlTrace
 from .core.orchestrator import Orchestrator, OrchestratorConfig
 from .core.planner import HeuristicPlanner
 from .core.scheduler import LocalRunner, ScheduleStore, Scheduler
+from .ecc import EccCatalog, EccDevTools, SkillTools, find_ecc_root
 from .interfaces.capabilities import BrowserProvider
 from .interfaces.memory import MemoryProvider
 from .interfaces.model import as_model_provider
@@ -76,6 +77,9 @@ class AlanRuntime:
     browser_note: str = ""
     internet_note: str = ""
     vibecoder_note: str = ""
+    #: ECC catalog state for ``alan doctor``: counts and root when loaded,
+    #: why not when it isn't. Empty means tools were not registered at all.
+    ecc_note: str = ""
     trace_path: Path | None = None
     _closeables: list[Any] = field(default_factory=list)
 
@@ -118,6 +122,7 @@ class AlanRuntime:
                 if self.vibecoder_note
                 else "not registered"
             ),
+            "ecc": self.ecc_note or "not registered",
             "telegram": (
                 {
                     "enabled": True,
@@ -481,9 +486,23 @@ def build_runtime(
         if coding is not None:
             _register_coding_tools(registry, coding)
         vibecoder_note = _register_vibecoder_tools(registry, settings)
+        # ECC builds with the tools that expose it, never separately: a catalog
+        # the planner can name entries from but the registry cannot load would
+        # produce a broken step, so both halves of that contract switch on and
+        # off together (and only with register_tools at all).
+        ecc_catalog, ecc_note = _register_ecc(registry, settings)
         closeables.append(registry)
     else:
         vibecoder_note = ""
+        ecc_catalog, ecc_note = None, ""
+
+    # The hint is part of the contract, not decoration: without it a user has
+    # no way to discover that naming a skill loads it, and a model told only
+    # that `skill.read` exists cannot know that an entry was *not* loaded when
+    # nothing in fact matched.
+    system_prompt = settings.system_prompt
+    if ecc_catalog is not None:
+        system_prompt = f"{system_prompt}\n\n{ecc_catalog.hint()}"
 
     orchestrator = Orchestrator(
         router,
@@ -491,9 +510,9 @@ def build_runtime(
         memory=memory,
         gate=gate,
         bus=bus,
-        planner=HeuristicPlanner(),
+        planner=HeuristicPlanner(skills=ecc_catalog),
         config=OrchestratorConfig(
-            system_prompt=settings.system_prompt,
+            system_prompt=system_prompt,
             top_k=settings.memory.top_k,
             auto_recall=settings.memory.auto_recall,
             auto_remember=settings.memory.auto_remember,
@@ -547,6 +566,7 @@ def build_runtime(
         internet_note=internet_note,
         trace_path=trace_path,
         vibecoder_note=vibecoder_note,
+        ecc_note=ecc_note,
     )
     runtime._closeables = closeables
     if memory is not None:
@@ -595,6 +615,38 @@ def _register_vibecoder_tools(registry: ToolRegistry, settings: Settings) -> str
         return f"vibecoder: not available ({reason}) - Alan cannot code on its own"
     registry.register_provider(tools)
     return f"vibecoder: {reason}"
+
+
+def _register_ecc(
+    registry: ToolRegistry, settings: Settings
+) -> tuple[EccCatalog | None, str]:
+    """Load the ECC catalog and register its tools, or say why nothing loaded.
+
+    Read-only throughout: the catalog is local markdown, ``skill.*`` returns
+    text, and ``ecc.*`` advises rather than executes. Registration still runs
+    through the ordinary provider path, so every call the gate decides on is
+    an ordinary ``PermissionRequest`` -- the integration adds no new way past
+    the gate, only new things for it to judge (ADR-006).
+    """
+    if not settings.ecc.enabled:
+        return None, "disabled"
+    root = find_ecc_root(settings.ecc.root)
+    if root is None:
+        return None, (
+            "enabled but no ECC found - clone https://github.com/affaan-m/ECC "
+            "to vendor\\ECC or set [ecc] root"
+        )
+    catalog = EccCatalog.load(root)
+    registry.register_provider(SkillTools(catalog, max_chars=settings.ecc.max_chars))
+    devtools = ""
+    if settings.ecc.devtools:
+        registry.register_provider(EccDevTools())
+        devtools = ", 8 dev tools"
+    counts = catalog.counts()
+    return catalog, (
+        f"{counts['skill']} skills, {counts['command']} commands, "
+        f"{counts['agent']} agents{devtools} from {root}"
+    )
 
 
 def _register_coding_tools(registry: ToolRegistry, coding: LocalCoding) -> None:

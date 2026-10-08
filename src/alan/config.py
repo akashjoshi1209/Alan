@@ -317,6 +317,35 @@ class VibecoderSettings:
 
 
 @dataclass
+class EccSettings:
+    """ECC's skills, commands, agents and advisory dev tools.
+
+    Off in code and on in this install's ``settings.toml``: ECC is an
+    integration someone chose, not a property of Alan, so a fresh checkout
+    behaves exactly as before until an operator turns it on.
+
+    Everything under this switch is read-only. ``enabled`` loads the catalog
+    and the gated ``skill.*`` discovery tools; ``devtools`` additionally
+    registers the eight advisory ``ecc.*`` tools, which analyse a project and
+    return the commands to run rather than running them. The permission gate
+    governs all of them -- nothing here grants, raises or bypasses a ceiling
+    (ADR-006), and an operator rule on ``skill.*`` / ``ecc.*`` blocks the
+    namespaces outright.
+    """
+
+    #: Master switch: load the ECC catalog + ``skill.*`` tools.
+    enabled: bool = False
+    #: Also register the advisory ``ecc.*`` dev tools.
+    devtools: bool = False
+    #: Where ECC lives. Empty means auto-detect: ``vendor/ECC``, then the
+    #: OpenCode install at ``~/.config/opencode``.
+    root: str = ""
+    #: Cap on skill text pulled into one run, in characters. A 400-line skill
+    #: would otherwise fill a local model's whole context window.
+    max_chars: int = 4000
+
+
+@dataclass
 class Settings:
     name: str = "Alan"
     provider: str = "auto"
@@ -351,6 +380,7 @@ class Settings:
     tools: ToolSettings = field(default_factory=ToolSettings)
     browser: BrowserSettings = field(default_factory=BrowserSettings)
     vibecoder: VibecoderSettings = field(default_factory=VibecoderSettings)
+    ecc: EccSettings = field(default_factory=EccSettings)
 
 
 def _provider_from_table(name: str, table: dict) -> ProviderSettings:
@@ -457,6 +487,17 @@ def _apply_tables(settings: Settings, raw: dict) -> Settings:
         v.project_dir = str(vibe.get("project_dir", v.project_dir))
         v.max_steps = int(vibe.get("max_steps", v.max_steps))
         v.timeout = float(vibe.get("timeout", v.timeout))
+
+    ecc = raw.get("ecc", {})
+    if ecc:
+        e = settings.ecc
+        e.enabled = _as_bool(ecc.get("enabled", e.enabled), "ecc.enabled")
+        e.devtools = _as_bool(ecc.get("devtools", e.devtools), "ecc.devtools")
+        e.root = str(ecc.get("root", e.root))
+        # Clamped, not validated: a ceiling that is merely silly (10 chars) is
+        # harmless in a way a security setting is not, and refusing to start
+        # over it would be the wrong kind of strict.
+        e.max_chars = max(500, min(int(ecc.get("max_chars", e.max_chars)), 20000))
 
     perms = raw.get("permissions", {})
     if perms:

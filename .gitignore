@@ -4,6 +4,12 @@ models/
 env/
 config/.env
 
+# Third-party content clone (ECC, pinned ef648e01 - see docs/integrations/ecc.md).
+# Only its markdown is read at runtime; a fresh clone restores it with
+#   git clone https://github.com/affaan-m/ECC vendor/ECC
+# and `alan doctor` reports the miss with the same instruction.
+vendor/
+
 # Runtime knowledge graph and session state
 .ua/
 

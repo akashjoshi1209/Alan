@@ -1,8 +1,9 @@
 # Dependency and integration manifest
 
 Every external repository and package Alan relies on, with an exact pin.
-Generated 2026-10-04. See [repository-audit.md](repository-audit.md) for the
-evidence behind each verdict, and
+Generated 2026-10-04 (ECC row added 2026-10-08). See
+[repository-audit.md](repository-audit.md) for the evidence behind each
+verdict, [ecc.md](ecc.md) for the ECC integration, and
 [../decisions/architecture-decisions.md](../decisions/architecture-decisions.md)
 for the decisions.
 
@@ -20,8 +21,14 @@ revision for every source Alan learns from.
 | browser-use/browser-use | https://github.com/browser-use/browser-use | `5c892e013a73` (tag `0.13.10`) | 2026-09-04 | MIT | A — isolated sidecar | `src/browser_sidecar.py`, `src/alan/tools/browser/` + `scripts/browser-serve.ps1` | None | Mature CDP browser automation, driven but not delegated to | Exact `==` pins conflict with Alan's main env; its agent loop and `extract_content` are deliberately unused; sidecar must be started separately |
 | openinterpreter/open-interpreter | https://github.com/openinterpreter/open-interpreter | `2767e5f20d69` | 2026-10-02 | Apache-2.0 | D — reference | `src/alan/tools/shell/`, `filesystem/` | None | Execution/harness-abstraction patterns | Now Rust (Codex fork); installs via `curl \| sh`; rejected as untrusted |
 | SWE-agent/SWE-agent | https://github.com/SWE-agent/SWE-agent | `3ea751c087f3` | 2026-07-16 | MIT | D — reference | `src/alan/agents/coding/` | None | Coding-agent decomposition and narrow tool set | Research-oriented deps (datasets/pandas/flask) unused by Alan |
+| affaan-m/ECC | https://github.com/affaan-m/ECC | `ef648e01` | 2026-10-08 | MIT | E — local content library | `src/alan/ecc/` | None (markdown read as data; tools ported independently) | 293 skills, 94 commands, 68 agent prompts as a gated read-only catalog; 8 advisory dev tools | The one vendored checkout (`vendor\ECC`); hooks deliberately not ported — its permission auto-approve has no path into Alan (ADR-006); see [ecc.md](ecc.md) |
 
-**No third-party source was modified.** No repository was forked or vendored.
+**No third-party source was modified.** No repository was forked. The one
+vendored checkout is ECC, cloned to `vendor\ECC` and read as data at runtime
+— its files are never edited, and the adapter is Alan's own code. `vendor/`
+is git-ignored like `env/`: the clone (pinned at `ef648e01`, 55 MB with its
+assets) stays local, and a fresh clone restores it with the single `git
+clone` command in [ecc.md](ecc.md).
 
 ## Packages in the main environment (`env\python`)
 

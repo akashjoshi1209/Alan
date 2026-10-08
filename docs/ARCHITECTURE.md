@@ -214,7 +214,7 @@ composition-root edit, not a rewrite.
 | `AgentRuntime` | `Orchestrator` |
 | `ModelProvider` | OpenAI, Anthropic, Groq, OpenRouter (the last two through `OpenAIProvider`, which takes the provider name rather than a key), Ollama, `UnavailableModel` |
 | `MemoryProvider` | cognee, mem0, `JsonMemory` |
-| `ToolProvider` | `ToolRegistry` over the standard tool set |
+| `ToolProvider` | `ToolRegistry` over the standard tool set; `SkillTools` and `EccDevTools` add the gated, read-only ECC tools when `[ecc]` is on |
 | `ExecutionProvider` | `LocalExecution` (jailed, argv-only, timeouts) |
 | `CodingProvider` | `LocalCoding` (analyse / edit / test / review) — registered when `[tools] coding = true`, but the planner no longer emits these steps |
 | `BrowserProvider` | `SidecarBrowser` (browser-use over loopback HTTP, port 8022) |
@@ -579,6 +579,7 @@ too, since passing one is the caller saying "learn into this".
 | `tools/opening.py` | Resolving "open X" to a program or a website |
 | `tools/execution.py` | `LocalExecution`: jailed, argv-only, timeouts |
 | `tools/coding.py` | `LocalCoding`: analyse / edit / test / review |
+| `ecc/` | ECC catalog (skills, commands, agents) and the gated `skill.*` / advisory `ecc.*` tools |
 | `models/router.py` | Category routing and bounded failover |
 | `memory/providers/` | cognee, mem0, json, and the fallback factory |
 | `agents/standard.py` | The seven subagents |

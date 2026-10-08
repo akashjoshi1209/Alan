@@ -375,6 +375,42 @@ without it Alan can still chat, browse and search.
 
 ---
 
+## Skills (ECC)
+
+Alan reads the [ECC](https://github.com/affaan-m/ECC) library — 293 skills,
+94 commands and 68 agent prompts — as a searchable, read-only catalog, wired
+through the same permission gate as every other tool:
+
+- **Name one, load one.** "use the tdd-workflow skill", "/code-review", or a
+  plain request containing every word of a multi-word skill name ("what is the
+  tdd workflow?") plans a `load_skill` step; the entry's instructions then
+  arrive in the prompt the way recalled memory does, and the answer follows
+  them. A lone common word never matches, and memory/schedule requests keep
+  precedence over skill loading.
+- **Tools, gated like everything else.** `skill.list`, `skill.search` and
+  `skill.read` are `SAFE` and register through the ordinary registry, so an
+  operator rule on `skill.*` turns the namespace off — ADR-006 gets no new
+  door. `skill.read` caps injected text at `[ecc] max_chars`, because a
+  400-line skill would otherwise fill a 2048-token local model's whole
+  context; the full text stays reachable with `alan skills --read`.
+- **Eight advisory dev tools.** `ecc.run_tests`, `ecc.lint_check`,
+  `ecc.format_code`, `ecc.check_coverage`, `ecc.dependency_analyzer`,
+  `ecc.security_audit`, `ecc.git_summary` and `ecc.changed_files` detect,
+  analyse and *print* commands — they never execute. Git goes through an argv
+  list with a validated ref, never a shell string.
+- **Browse it.** `alan skills` lists the library, `alan skills <terms>`
+  searches it, `alan skills --read <name>` prints one entry in full, and
+  `alan doctor` shows what loaded.
+
+On in this install's `settings.toml` (`[ecc] enabled = true`); off in code, so
+a fresh checkout behaves exactly as before until you turn it on. The library
+itself lives in `vendor\ECC` (git-ignored and pinned; if it is missing,
+`alan doctor` prints the one-line clone command). ECC's hooks
+are deliberately *not* ported — its permission auto-approve hook has no path
+into Alan. Details: [docs/integrations/ecc.md](docs/integrations/ecc.md).
+
+---
+
 ## Layout
 
 ```
@@ -406,6 +442,7 @@ without it Alan can still chat, browse and search.
 │       ├─ models\          # pydantic schemas
 │       ├─ permissions\     # gate, tiers, policy
 │       ├─ agents\          # the seven subagents
+│       ├─ ecc\             # ECC catalog + skill.*/ecc.* tools (read-only)
 │       └─ tools\           # registry, standard set, shell/, filesystem/, browser/
 ├─ scripts\                 # run / activate / selftest / setup-* / *-serve
 │                           # install-command.ps1 -> the `alan` command

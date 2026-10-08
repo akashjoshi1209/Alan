@@ -17,9 +17,13 @@ from __future__ import annotations
 import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 from ..interfaces.model import ModelCategory, ModelProvider
 from ..interfaces.types import RiskLevel
+
+if TYPE_CHECKING:  # pragma: no cover - import cycle avoidance, typing only
+    from ..ecc.catalog import EccCatalog, Skill
 
 
 @dataclass
@@ -426,10 +430,44 @@ def _schedule_parts(text: str) -> tuple[str, str]:
     return payload, when
 
 
+def _skill_plan(text: str, entry: Skill, *, explicit: bool) -> Plan:
+    """Load one ECC entry, then answer with its instructions in context.
+
+    The only shape skill use can take in Alan: the model layer has no
+    function-calling, so an entry's text arrives the way recalled memory does
+    -- as an observation the answer step reads. Load first, answer second, and
+    the original request travels with the answer step so the match never drops
+    part of what the user asked.
+    """
+    return Plan(
+        goal=f"Apply ECC {entry.kind} '{entry.name}'",
+        steps=[
+            Step("load_skill", f"Load ECC {entry.kind} {entry.name}",
+                 {"kind": entry.kind, "name": entry.name}, RiskLevel.SAFE),
+            Step("answer", "Answer following the loaded instructions",
+                 {"query": text}, RiskLevel.SAFE),
+        ],
+        category=ModelCategory.GENERAL,
+        intent="use_skill",
+        complexity=2,
+        rationale=(
+            f"request explicitly names the ECC {entry.kind} '{entry.name}'"
+            if explicit
+            else f"request wording overlaps the ECC {entry.kind} '{entry.name}'"
+        ),
+    )
+
+
 class HeuristicPlanner(Planner):
     """Deterministic intent classification. No model required."""
 
     name = "heuristic"
+
+    def __init__(self, skills: EccCatalog | None = None) -> None:
+        #: The ECC library when the integration is on; ``None`` (the default)
+        #: disables both skill matches and leaves every other intent exactly
+        #: as it was.
+        self.skills = skills
 
     def plan(self, request: str, *, context: str = "") -> Plan:
         text = (request or "").strip()
@@ -505,6 +543,16 @@ class HeuristicPlanner(Planner):
                 rationale="request asks to erase memory",
                 needs_memory=False,
             )
+
+        # Explicit skill invocation, checked before the generic intents so a
+        # request that *names* an ECC entry gets that entry's instructions --
+        # "use the security-review skill" must not degrade into a generic
+        # coding or chat plan. Memory and schedule keep precedence above:
+        # "remember to follow the TDD skill" is still a memory write.
+        if self.skills is not None:
+            named = self.skills.match_explicit(text)
+            if named is not None:
+                return _skill_plan(text, named, explicit=True)
 
         target, remainder = _open_target(text)
         if target and _looks_like_source(target):
@@ -637,6 +685,16 @@ class HeuristicPlanner(Planner):
                 rationale="request asks for external information",
             )
 
+        # Last chance before plain chat: multi-word ECC names whose tokens all
+        # appear in the request ("what's the tdd workflow?"). Runs only where
+        # coding, research, memory and schedule already declined the request,
+        # so it can never hijack an intent that had work of its own; single-word
+        # names never match here at all.
+        if self.skills is not None:
+            implied = self.skills.match_implicit(text)
+            if implied is not None:
+                return _skill_plan(text, implied, explicit=False)
+
         # Default: a conversational turn, but still consult memory.
         steps = [Step("answer", "Answer from context and memory", {"query": text},
                       RiskLevel.SAFE)]
@@ -686,8 +744,11 @@ class ModelPlanner(Planner):
                     # model is offered no "schedule" word in its prompt, so a
                     # mismatch here means confusion, not insight -- and
                     # relabelling schedule steps as "chat" would strip them
-                    # from the tool catalog the model is shown.
-                    if base.intent.startswith("schedule"):
+                    # from the tool catalog the model is shown. The same
+                    # applies to use_skill: the plan's whole purpose is the
+                    # load_skill step, and relabelling it would hide the
+                    # skill.read tool from the catalog that step runs against.
+                    if base.intent.startswith("schedule") or base.intent == "use_skill":
                         return base
                     replanned = self.fallback.plan(request, context=context)
                     replanned.intent = candidate
