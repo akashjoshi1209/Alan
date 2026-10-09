@@ -172,6 +172,17 @@ class TestConfiguration(unittest.TestCase):
         self.assertIn("shell.execute", settings.permissions.deny)
         self.assertTrue(settings.tools.execution)
 
+    def test_execution_root_is_read_from_config(self) -> None:
+        """The jail root is configuration, not a hard-coded folder."""
+        from alan.config import _apply_tables
+
+        # Default: empty, which the runtime reads as "Alan's own folder".
+        self.assertEqual(Settings().tools.execution_root, "")
+        settings = _apply_tables(
+            Settings(), {"tools": {"execution": True, "execution_root": "Z:\\"}}
+        )
+        self.assertEqual(settings.tools.execution_root, "Z:\\")
+
     def test_quoted_boolean_strings_do_not_invert(self) -> None:
         from alan.config import _as_bool
 
@@ -1375,6 +1386,142 @@ class TestPlanner(unittest.TestCase):
                         "is the repository open to contributions"):
             self.assertNotEqual(self.planner.plan(request).intent, "open",
                                 f"{request!r} was mistaken for a launch")
+
+
+# --------------------------------------------------------------------------
+# 7b. Whole-device filesystem planning
+# --------------------------------------------------------------------------
+class TestFilesystemPlanner(unittest.TestCase):
+    """A request with a real path is a filesystem request, and nothing else is.
+
+    The planner is the only thing standing between "read D:/work/x.txt" and a
+    tool call that actually touches the disk, so both directions matter: a path
+    must reach the filesystem tools, and prose that merely mentions files must
+    not.
+    """
+
+    def setUp(self) -> None:
+        self.planner = HeuristicPlanner()
+
+    def test_a_path_reads_a_file(self) -> None:
+        plan = self.planner.plan("read D:/work/test_unlimited.txt")
+        self.assertEqual(plan.intent, "filesystem")
+        self.assertEqual(plan.actions(), ["fs_read"])
+        self.assertEqual(plan.steps[0].arguments["path"],
+                         "D:/work/test_unlimited.txt")
+        self.assertEqual(plan.steps[0].risk, RiskLevel.SAFE)
+
+    def test_a_backslash_path_is_still_a_path(self) -> None:
+        plan = self.planner.plan(r"read D:\work\notes.txt")
+        self.assertEqual(plan.actions(), ["fs_read"])
+        self.assertEqual(plan.steps[0].arguments["path"], r"D:\work\notes.txt")
+
+    def test_a_quoted_path_with_spaces_survives(self) -> None:
+        plan = self.planner.plan('read "D:/my work/today.txt"')
+        self.assertEqual(plan.actions(), ["fs_read"])
+        self.assertEqual(plan.steps[0].arguments["path"], "D:/my work/today.txt")
+
+    def test_a_trailing_period_is_not_part_of_the_path(self) -> None:
+        plan = self.planner.plan("read D:/work/notes.txt.")
+        self.assertEqual(plan.steps[0].arguments["path"], "D:/work/notes.txt")
+
+    def test_a_listing_request_lists(self) -> None:
+        cases = {
+            "list files in D:/work": "D:/work",
+            "list the directory D:/work": "D:/work",
+            "show me the files in D:/work": "D:/work",
+            "ls D:/work": "D:/work",
+            "dir D:/work": "D:/work",
+        }
+        for request, expected in cases.items():
+            with self.subTest(request=request):
+                plan = self.planner.plan(request)
+                self.assertEqual(plan.intent, "filesystem", request)
+                self.assertEqual(plan.actions(), ["fs_list"], request)
+                self.assertEqual(plan.steps[0].arguments["path"], expected, request)
+                self.assertEqual(plan.steps[0].risk, RiskLevel.SAFE)
+
+    def test_reading_a_directory_lists_it(self) -> None:
+        """A path with no extension names a folder, not a file."""
+        plan = self.planner.plan("read D:/work")
+        self.assertEqual(plan.actions(), ["fs_list"])
+        self.assertEqual(plan.steps[0].arguments["path"], "D:/work")
+
+    def test_writing_with_the_content_after_the_path(self) -> None:
+        plan = self.planner.plan("write D:/work/a.txt with content hello world")
+        self.assertEqual(plan.intent, "filesystem")
+        self.assertEqual(plan.actions(), ["fs_write"])
+        self.assertEqual(plan.steps[0].arguments["path"], "D:/work/a.txt")
+        self.assertEqual(plan.steps[0].arguments["content"], "hello world")
+        self.assertEqual(plan.steps[0].risk, RiskLevel.LOW_RISK)
+
+    def test_writing_with_the_path_in_the_tail(self) -> None:
+        plan = self.planner.plan("write hello world to D:/work/a.txt")
+        self.assertEqual(plan.actions(), ["fs_write"])
+        self.assertEqual(plan.steps[0].arguments["path"], "D:/work/a.txt")
+        self.assertEqual(plan.steps[0].arguments["content"], "hello world")
+
+    def test_a_bare_filename_is_writable(self) -> None:
+        plan = self.planner.plan("create notes.txt with content hello there")
+        self.assertEqual(plan.actions(), ["fs_write"])
+        self.assertEqual(plan.steps[0].arguments["path"], "notes.txt")
+        self.assertEqual(plan.steps[0].arguments["content"], "hello there")
+
+    def test_delete_requires_the_tool_to_be_named(self) -> None:
+        plan = self.planner.plan("filesystem.delete D:/work/old.txt")
+        self.assertEqual(plan.actions(), ["fs_delete"])
+        self.assertEqual(plan.steps[0].arguments["path"], "D:/work/old.txt")
+        self.assertEqual(plan.steps[0].risk, RiskLevel.HIGH_RISK)
+
+    def test_an_absolute_source_file_opened_is_read(self) -> None:
+        """"open D:/work/x.txt" reads the file where it lies."""
+        plan = self.planner.plan("open D:/work/test_unlimited.txt")
+        self.assertEqual(plan.intent, "filesystem")
+        self.assertEqual(plan.actions(), ["fs_read"])
+
+    # -- the negative direction: prose about files keeps its own intent ----
+    def test_prose_about_files_does_not_become_a_write(self) -> None:
+        for request in ("write a test for the cache",
+                        "add a test for the cache",
+                        "implement a retry in utils.py"):
+            with self.subTest(request=request):
+                self.assertNotEqual(
+                    self.planner.plan(request).intent, "filesystem", request
+                )
+
+    def test_bare_filenames_without_verbs_stay_inspect(self) -> None:
+        for request in ("read math.js and tell me what it does",
+                        "explain what config.yaml contains",
+                        "look at index.html and describe it"):
+            with self.subTest(request=request):
+                plan = self.planner.plan(request)
+                self.assertEqual(plan.intent, "vibecoder_inspect", request)
+
+    def test_a_relative_source_path_opened_stays_inspect(self) -> None:
+        plan = self.planner.plan(r"open src\alan\core\planner.py")
+        self.assertEqual(plan.intent, "vibecoder_inspect")
+        self.assertIn("planner.py", plan.steps[0].arguments["task"])
+
+    def test_deleting_prose_stays_out_of_the_filesystem(self) -> None:
+        plan = self.planner.plan("delete the file notes.txt")
+        self.assertNotEqual(plan.intent, "filesystem")
+        self.assertEqual(plan.actions(), ["answer"])
+
+    def test_a_coding_request_that_mentions_deleting_is_untouched(self) -> None:
+        plan = self.planner.plan("delete the old database and refactor the api")
+        self.assertNotEqual(plan.intent, "filesystem")
+        self.assertIn("vibecoder_delegate", plan.actions())
+
+    def test_a_schedule_listing_is_not_a_directory_listing(self) -> None:
+        plan = self.planner.plan("list the schedule")
+        self.assertEqual(plan.intent, "schedule_list")
+
+    def test_filesystem_plans_are_serialisable(self) -> None:
+        import json
+
+        payload = self.planner.plan("read D:/work/a.txt").to_dict()
+        json.dumps(payload)
+        self.assertEqual(payload["intent"], "filesystem")
 
 
 # --------------------------------------------------------------------------

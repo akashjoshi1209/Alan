@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import sys
 import time
 from typing import Any, List, Optional
 
@@ -27,6 +28,18 @@ from .core.scheduler import parse_when
 from .interfaces.types import PermissionRequest
 from .llm import ProviderError, known_providers
 from .memory import CogneeMemory
+
+# Rich prints box-drawing glyphs (the plan table's borders, the step bullets),
+# and on a Windows console still reporting cp1252 those raise
+# UnicodeEncodeError and kill the command before it draws anything. Reconfigure
+# to UTF-8 with replacement *before* the Console exists; guarded so a stream
+# that cannot be reconfigured (a closed pipe, a StringIO) still works.
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[union-attr]
+    except (AttributeError, ValueError, OSError):
+        pass
+del _stream
 
 app = typer.Typer(add_completion=False, help="Alan - a portable, self-contained AI assistant.")
 console = Console()
@@ -647,8 +660,18 @@ def _runtime():
 def plan(text: List[str] = typer.Argument(..., help="The request to plan.")) -> None:
     """Show the plan Alan would follow, without running anything."""
     from .core.planner import HeuristicPlanner
+    from .ecc import EccCatalog, find_ecc_root
 
-    plan_ = HeuristicPlanner().plan(" ".join(text))
+    # Built the same way runtime builds it: a bare HeuristicPlanner has no
+    # skill catalog, so `alan plan "use the security-review skill"` would show
+    # a plan that the real run does not follow.
+    planner = HeuristicPlanner()
+    settings = load_settings()
+    if settings.ecc.enabled:
+        root = find_ecc_root(settings.ecc.root)
+        if root is not None:
+            planner = HeuristicPlanner(skills=EccCatalog.load(root))
+    plan_ = planner.plan(" ".join(text))
     table = Table(title=f"plan: {plan_.goal}", show_lines=False)
     table.add_column("#", justify="right")
     table.add_column("action")

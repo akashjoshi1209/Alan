@@ -15,8 +15,9 @@ Namespace map:
 
 ``shell.*`` and ``filesystem.delete`` only exist when an
 :class:`~alan.interfaces.capabilities.ExecutionProvider` was supplied, which
-itself is gated by ``[tools] execution = false`` in configuration. Alan ships
-with local execution switched off.
+itself is gated by ``[tools] execution`` in configuration. Execution is
+opt-in and stays jailed: ``[tools] execution_root`` is the one root the
+executor will touch, and a path outside it is refused.
 """
 
 from __future__ import annotations

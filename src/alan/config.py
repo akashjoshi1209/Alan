@@ -257,6 +257,10 @@ class ToolSettings:
 
     #: browser is off by default (ADR-003) and execution off until enabled.
     execution: bool = False
+    #: The jail `LocalExecution` enforces: any path outside this root is
+    #: refused by the executor itself. Empty falls back to Alan's own folder.
+    #: This is what makes "whole-device" access scoped rather than rootless.
+    execution_root: str = ""
     browser: bool = False
     coding: bool = False
     #: The internet backends (Exa search + Jina Reader) are zero-config, so
@@ -549,6 +553,7 @@ def _apply_tables(settings: Settings, raw: dict) -> Settings:
     if tools:
         t = settings.tools
         t.execution = _as_bool(tools.get("execution", t.execution), "tools.execution")
+        t.execution_root = str(tools.get("execution_root", t.execution_root))
         t.browser = _as_bool(tools.get("browser", t.browser), "tools.browser")
         t.coding = _as_bool(tools.get("coding", t.coding), "tools.coding")
         t.internet = _as_bool(tools.get("internet", t.internet), "tools.internet")

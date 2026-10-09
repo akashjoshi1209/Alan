@@ -198,8 +198,9 @@ SAFE < LOW_RISK < MEDIUM_RISK < HIGH_RISK < PRIVILEGED
   no such capability and runs unasked.
 - `auto_confirm = false` means a `CONFIRMATION_REQUIRED` decision stops the
   tool and tells you, instead of Alan deciding for you.
-- Local execution is jailed to `ALAN_HOME`. A path outside it is refused, not
-  clamped.
+- Local execution stays jailed: `[tools] execution_root` is the one root the
+  executor will touch, and a path outside it is refused, not clamped. Empty
+  falls back to `ALAN_HOME`.
 
 Nothing above the gate can be talked out of it. Not a prompt, not a plan, not a
 model's own suggestion.
@@ -215,7 +216,7 @@ composition-root edit, not a rewrite.
 | `ModelProvider` | OpenAI, Anthropic, Groq, OpenRouter (the last two through `OpenAIProvider`, which takes the provider name rather than a key), Ollama, `UnavailableModel` |
 | `MemoryProvider` | cognee, mem0, `JsonMemory` |
 | `ToolProvider` | `ToolRegistry` over the standard tool set; `SkillTools` and `EccDevTools` add the gated, read-only ECC tools when `[ecc]` is on |
-| `ExecutionProvider` | `LocalExecution` (jailed, argv-only, timeouts) |
+| `ExecutionProvider` | `LocalExecution` (jailed to `[tools] execution_root`, argv-only, timeouts) |
 | `CodingProvider` | `LocalCoding` (analyse / edit / test / review) — registered when `[tools] coding = true`, but the planner no longer emits these steps |
 | `BrowserProvider` | `SidecarBrowser` (browser-use over loopback HTTP, port 8022) |
 | `Vibecoder` | `VibecoderTools` (`inspect` / `delegate` / `report`) |
@@ -322,6 +323,51 @@ so for those the planner asks the operating system what is installed. An
 *assumed* answer counts as no answer — a bare word suffixed with `.com` always
 parses, so accepting it would confirm every English noun is an application.
 
+### Whole-device filesystem access
+
+`filesystem.read` / `filesystem.list` / `filesystem.write` / `filesystem.delete`
+are ordinary tool specs like any other, but for a long time nothing reached
+them: the planner mapped a request like "read D:/work/notes.txt" onto
+`vibecoder_inspect` (or plain chat), so the tools were registered and
+unreachable at the same time. The planner now has a filesystem branch.
+
+Routing is gated on something concrete, because the failure that matters here
+is the destructive one — a chat request about deleting things must not become a
+delete:
+
+- **read** needs a read verb (`read`/`cat`/`type`/`print`) *and* a path that
+  carries a separator or a drive letter. A path with no extension names a
+  directory, so it lists instead. A bare filename ("read math.js") carries no
+  separator and keeps its old `vibecoder_inspect` intent.
+- **list** is checked before read, so "read the files in D:/work" lists. It
+  needs a listing verb and one of the words *files/directories/folders/contents*.
+- **write** needs a path *and* content ("write D:/a.txt with content hello",
+  "write hello to D:/a.txt"). Prose without a path — "write a test for the
+  cache" — keeps its coding intent.
+- **delete** needs the *tool* to be named (`filesystem.delete`/`fs.delete`) and a
+  path after it. The bare sentence "delete the file notes.txt" stays chat.
+
+"Open" keeps precedence at the top of the request, because `open` already means
+launch: only an *absolute* source path (`open D:/work/notes.txt`) is read where
+it lies; a relative one (`open src/core/planner.py`) stays the Vibecoder reader.
+
+The tool mapping lives in `_CAPABILITY_HANDLERS` (`fs_read → filesystem.read`,
+and so on) and the intent allow-list in `_allowed_for`, so a filesystem plan
+escalates through the same `requires_capability()` path as every other command
+rather than being answered conversationally.
+
+### The execution jail
+
+`[tools] execution = true` builds a `LocalExecution`, and `execution_root`
+decides how much of the machine it may touch. Any resolved path outside that
+root is refused by the executor itself, so "whole-device" access is a scoped
+privilege, not an unrestricted one: the shipped configuration points at `D:\`,
+which leaves `C:\Windows` and the rest of the system unreachable even while the
+D: drive is fully usable. An empty root falls back to Alan's own folder — the
+conservative default. The permission gate is unchanged and still sits in front
+of every call: turning execution on widens *what the executor will allow*, not
+what the gate will auto-approve.
+
 ### Streaming is not tool-less
 
 `assistant.stream()` calls the routed model directly, skipping the plan,
@@ -347,11 +393,12 @@ those steps, so nothing reaches them in normal use. Each entry declares
 arguments against `input_schema` before invoking, so a plan can never pass a key
 the tool does not accept.
 
-`alan doctor` counts what is *reachable*, not what exists: with
-`[tools] execution = false` and `coding = false` the three `filesystem.delete` /
-`shell.*` tools and the four `code.*` tools are not registered, which is why the
-count is 9 rather than 16. A low count here is configuration being reported
-honestly, not a missing tool.
+`alan doctor` counts what is *reachable*, not what exists: `shell.execute`,
+`shell.python` and `filesystem.delete` are registered only when
+`[tools] execution = true`, and the four `code.*` tools only when `coding =
+true`. The ECC providers (`skill.*`, `ecc.*`) add their own entries when
+`[ecc]` is on. A low count here is configuration being reported honestly, not a
+missing tool.
 
 Namespaces: `filesystem`, `shell`, `system`, `memory`, `web`, `code`.
 

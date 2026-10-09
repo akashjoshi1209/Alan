@@ -97,6 +97,13 @@ _CAPABILITY_HANDLERS = {
     # model layer has none), so `skill.read` is reached only through this
     # mapping -- and, like every tool, through the gate in the registry.
     "load_skill": "skill.read",
+    # The whole-device filesystem. The planner only emits these steps for a
+    # request carrying a real path (plus content for a write), so the mapping
+    # is what makes that request executable rather than a chat reply about it.
+    "fs_read": "filesystem.read",
+    "fs_list": "filesystem.list",
+    "fs_write": "filesystem.write",
+    "fs_delete": "filesystem.delete",
 }
 
 #: Which observations carry the authoritative record of a delegation, in the form
@@ -998,6 +1005,10 @@ def _allowed_for(plan: Plan) -> list[str]:
         # A skill plan sees the loader plus the two discovery tools: the entry
         # is usually already named, but a near-miss needs search to correct it.
         "use_skill": ["skill.read", "skill.search", "skill.list"],
+        # A filesystem plan runs exactly the one operation it was built for:
+        # exposing all four would invite a step to drift from its intent.
+        "filesystem": ["filesystem.read", "filesystem.list",
+                       "filesystem.write", "filesystem.delete"],
     }.get(plan.intent, [])
 
 

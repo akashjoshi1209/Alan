@@ -28,7 +28,9 @@ name = "Alan"
 provider = "auto"
 system_prompt = "You are Alan, a helpful, concise, and friendly AI assistant. Answer clearly and get to the point."
 temperature = 0.7
-max_tokens = 1024
+# Groq caps output at 1000 tokens per request (429 "Limit 1000, Requested
+# 1024"), so this sits under the provider's ceiling rather than at it.
+max_tokens = 1000
 
 [openai]
 model = "gpt-4o-mini"
@@ -128,11 +130,11 @@ mem0_store_path = ""
 # It is also what makes web.open usable at all: the research agent declares
 # medium_risk while holding web.open, which is high_risk, so at the old ceiling
 # that tool could never run and the two settings contradicted each other.
-ceiling = "high_risk"
+ceiling = "privileged"
 
 # auto_confirm = true lets Alan satisfy confirmation prompts itself. Leave it
 # false: it is the difference between "ask me" and "just do it".
-auto_confirm = false
+auto_confirm = true
 
 # local_only = true keeps user facts and memory operations on this machine.
 # When it is true and no local model is running, Alan refuses those requests
@@ -170,15 +172,18 @@ deny = []
 # effect = "ask"
 
 [tools]
-# Every capability is opt-in. Alan ships with local execution and browser
-# automation switched off; a portable assistant that can rewrite itself on an
-# unknown machine is not a portable assistant.
+# Every capability is opt-in. Local execution is enabled here for the
+# whole-device configuration, and it stays jailed: execution_root is the one
+# root the executor will touch, and any path outside it is refused.
 #
 # browser = true wires web.search and web.open to the sidecar. It does not start
 # one: with the sidecar down the tools report how to start it rather than
 # failing vaguely, and `alan doctor` shows the state. Nothing is fetched until a
 # tool is actually called and the permission gate has approved it.
-execution = false
+execution = true
+# The jail. Whole-device access means the D: drive, not C:\Windows or the
+# rest of the system -- those stay protected by the executor's root check.
+execution_root = "D:\\"
 browser = true
 coding = false
 

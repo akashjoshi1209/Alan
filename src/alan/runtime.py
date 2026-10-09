@@ -440,9 +440,15 @@ def build_runtime(
     else:
         memory_note = f"injected {memory.name}"
 
-    # Even when execution is enabled it is jailed to Alan's own folder, so a
-    # mistake cannot rewrite the host outside the product.
-    execution = LocalExecution(root=HOME) if settings.tools.execution else None
+    # The jail is the configured execution root: a request outside it is
+    # refused by the executor itself, so "whole-device" access stays a scoped
+    # privilege rather than an unrestricted one. Empty falls back to Alan's
+    # own folder, which is the conservative default.
+    execution = (
+        LocalExecution(root=settings.tools.execution_root or HOME)
+        if settings.tools.execution
+        else None
+    )
     coding = LocalCoding(execution) if settings.tools.coding else None
 
     # The browser is a sidecar, so constructing the provider costs nothing and

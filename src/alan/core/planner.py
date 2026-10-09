@@ -327,6 +327,202 @@ def _strip_connective(text: str) -> str:
         out = stripped
 
 
+# -- whole-device filesystem requests ---------------------------------------
+#: Tokeniser for path-shaped requests: a double-quoted run, a single-quoted
+#: run, or a bare word. Quoted tokens are taken innermost-first so a path with
+#: spaces survives ("read \"my notes/today.txt\"").
+_FS_TOKEN = re.compile(r'"[^"\n]+"|\'[^\']+\'|\S+')
+#: A path's file extension. Separates "read D:/work/notes" (a directory, so a
+#: listing) from "read D:/work/notes.txt" (a file, so a read).
+_FS_EXT = re.compile(r"\.\w{1,6}$")
+
+
+def _fs_path(text: str, *, allow_filename: bool = False) -> str | None:
+    """First path-shaped token in ``text``, or ``None``.
+
+    A path has to carry a separator or a drive letter, so ordinary nouns are
+    never mistaken for one: "delete the old database and refactor the api"
+    names no file, while "read D:/work/notes.txt" does. ``allow_filename``
+    additionally accepts a bare filename such as ``notes.txt`` -- only the
+    write and delete forms ask for it, because there the file itself is what
+    is being named.
+    """
+    for match in _FS_TOKEN.finditer(text or ""):
+        raw = match.group(0)
+        if len(raw) >= 2 and raw[0] in "\"'" and raw[-1] == raw[0]:
+            token = raw[1:-1]
+        else:
+            token = raw.strip()
+        # Trailing sentence punctuation: "open D:/notes.txt." is one path,
+        # not a path ending in a period.
+        token = token.rstrip(".,;:!?)]}")
+        if not token or "://" in token:
+            continue
+        if re.match(r"^[A-Za-z]:[/\\]", token):
+            return token
+        if token.startswith(("/", "\\", "~", "./", "../")):
+            return token
+        if "\\" in token:
+            return token
+        if "/" in token and (_FS_EXT.search(token) or token.count("/") > 1):
+            return token
+        if allow_filename and _FS_EXT.search(token):
+            return token
+    return None
+
+
+def _fs_abs(target: str) -> bool:
+    """Whether ``target`` is absolute: a drive, UNC, rooted or home path."""
+    return bool(re.match(r"^(?:[A-Za-z]:|~|[/\\])", (target or "").strip()))
+
+
+#: "list the files in D:/work" -- a directory listing, not a file read. The
+#: verb must lead, and everything but the bare ``ls``/``dir`` needs the noun,
+#: so "read the file notes.txt" falls through to a read instead.
+_FS_LIST_VERB = re.compile(
+    r"^\s*(?:please\s+|(?:can|could|would|will)\s+you\s+(?:please\s+)?)?"
+    r"(?P<verb>list|show(?:\s+me)?|ls|dir|read)\b(?P<rest>.*)$",
+    re.I | re.S,
+)
+_FS_LIST_NOUN = re.compile(
+    r"^\s*(?:the\s+|some\s+|my\s+|all\s+|a\s+|of\s+)*"
+    r"(?:files|directories|directory|dirs?|folders?|contents?)\b(?P<rest>.*)$",
+    re.I | re.S,
+)
+#: The verbs that ask for a file's *contents*. Deliberately not "open": that
+#: verb belongs to the launcher branch above, which only overrules us for
+#: relative source paths.
+_FS_READ_VERB = re.compile(r"\b(?:read|cat|type|print|show\s+me)\b", re.I)
+#: Form A of a write: a path between the verb and the content marker. The
+#: region excludes newlines only -- a path contains dots ("a.txt"), so a
+#: sentence-punctuation class here would refuse to span the very thing it is
+#: looking for. It stays length-bounded so a stray "with" far away cannot turn
+#: an unrelated sentence into a write.
+_FS_WRITE_WITH = re.compile(
+    r"\b(?:create|write|make|save)\b(?P<mid>[^\n]{0,120}?)"
+    r"\b(?:with|containing)(?:\s+content)?\s+(?P<content>[^\n]+)",
+    re.I,
+)
+#: Form B of a write: the content first, the path in the tail.
+_FS_WRITE_TO = re.compile(
+    r"\b(?:write|put|save)\b(?P<content>[^\n]+?)\s+to\s+(?P<tail>[^\n]+)$",
+    re.I,
+)
+#: Delete is gated on the *tool* being named, never on the bare verb: a chat
+#: request about deleting things must not become a destructive plan.
+_FS_DELETE = re.compile(r"\b(?:filesystem|fs)\s*\.\s*delete\b", re.I)
+
+
+def _fs_list_target(text: str) -> str | None:
+    """Directory a listing request names, ``None`` when it is not one."""
+    match = _FS_LIST_VERB.match(text)
+    if not match:
+        return None
+    verb = match.group("verb").lower()
+    rest = match.group("rest")
+    if verb not in ("ls", "dir"):
+        noun = _FS_LIST_NOUN.match(rest)
+        if noun is None:
+            return None
+        rest = noun.group("rest")
+    rest = re.sub(r"^(?:\s+)(?:in|of|at|under|from)\s+", "", rest.strip(),
+                  flags=re.I).strip()
+    path = _fs_path(rest)
+    if path is not None:
+        return path
+    tokens = rest.split()
+    return tokens[0] if len(tokens) == 1 else "."
+
+
+def _fs_plan(step: str, description: str, args: dict, *, risk: RiskLevel,
+             category: ModelCategory, needs_memory: bool,
+             rationale: str) -> Plan:
+    """A single-step plan that performs one filesystem operation."""
+    return Plan(
+        goal=description,
+        steps=[Step(step, description, dict(args), risk)],
+        category=category,
+        intent="filesystem",
+        complexity=1,
+        rationale=rationale,
+        needs_memory=needs_memory,
+    )
+
+
+def _filesystem_plan(text: str) -> Plan | None:
+    """Route a whole-device file request to the filesystem tools, or ``None``.
+
+    Every form is gated on something concrete -- a path for read and list, a
+    path *and* content for write, an explicitly-named tool for delete -- so
+    prose that merely mentions files ("write a test for the cache", "delete
+    the old database and refactor the api") keeps its original intent.
+    """
+    # -- delete: only an explicitly-named tool call ------------------------
+    named = _FS_DELETE.search(text)
+    if named:
+        path = _fs_path(text[named.end():], allow_filename=True)
+        if path:
+            return _fs_plan(
+                "fs_delete", f"Delete {path}", {"path": path},
+                risk=RiskLevel.HIGH_RISK, category=ModelCategory.FAST,
+                needs_memory=False,
+                rationale="request names filesystem.delete and a path",
+            )
+
+    # -- list: before read, so "read the files in D:/work" lists ------------
+    listed = _fs_list_target(text)
+    if listed is not None:
+        return _fs_plan(
+            "fs_list", f"List files in {listed}", {"path": listed},
+            risk=RiskLevel.SAFE, category=ModelCategory.FAST,
+            needs_memory=False,
+            rationale="request asks for the contents of a directory",
+        )
+
+    # -- write: a path plus the content to put there ------------------------
+    written = _FS_WRITE_WITH.search(text)
+    if written:
+        path = _fs_path(written.group("mid"), allow_filename=True)
+        if path:
+            content = written.group("content").strip()
+            return _fs_plan(
+                "fs_write", f"Write {path}", {"path": path, "content": content},
+                risk=RiskLevel.LOW_RISK, category=ModelCategory.FAST,
+                needs_memory=False,
+                rationale="request names a file and the content to write",
+            )
+    written = _FS_WRITE_TO.search(text)
+    if written:
+        path = _fs_path(written.group("tail"), allow_filename=True)
+        if path:
+            content = written.group("content").strip()
+            return _fs_plan(
+                "fs_write", f"Write {path}", {"path": path, "content": content},
+                risk=RiskLevel.LOW_RISK, category=ModelCategory.FAST,
+                needs_memory=False,
+                rationale="request names content and a file to write it to",
+            )
+
+    # -- read: an actual path, and a path without an extension is a folder --
+    if _FS_READ_VERB.search(text):
+        path = _fs_path(text)
+        if path:
+            if not _FS_EXT.search(path):
+                return _fs_plan(
+                    "fs_list", f"List files in {path}", {"path": path},
+                    risk=RiskLevel.SAFE, category=ModelCategory.FAST,
+                    needs_memory=False,
+                    rationale="request reads a path that names a directory",
+                )
+            return _fs_plan(
+                "fs_read", f"Read {path}", {"path": path},
+                risk=RiskLevel.SAFE, category=ModelCategory.GENERAL,
+                needs_memory=True,
+                rationale="request reads a file at an explicit path",
+            )
+    return None
+
+
 def _open_target(text: str) -> tuple[str | None, str]:
     """Split "open youtube and tell me about it" into ("youtube", "tell me about it").
 
@@ -555,6 +751,16 @@ class HeuristicPlanner(Planner):
                 return _skill_plan(text, named, explicit=True)
 
         target, remainder = _open_target(text)
+        if target and _looks_like_source(target) and _fs_abs(target):
+            # "open D:/work/notes.txt" names a real file on this machine, so it
+            # is read where it lies rather than handed to the Vibecoder reader.
+            return _fs_plan(
+                "fs_read", f"Read {target}", {"path": target},
+                risk=RiskLevel.SAFE, category=ModelCategory.GENERAL,
+                needs_memory=True,
+                rationale="target is an absolute path to an existing-style "
+                          "source file, so it is read directly",
+            )
         if target and _looks_like_source(target):
             # "open src/core/planner.py" is a request to read a file. Launching it
             # would fail, and answering about it from memory would be a guess.
@@ -614,6 +820,10 @@ class HeuristicPlanner(Planner):
                 complexity=1 + len(steps) - 1,
                 rationale="request begins with a verb that opens something",
             )
+
+        fs_plan = _filesystem_plan(text)
+        if fs_plan is not None:
+            return fs_plan
 
         if _CODING.search(text) or _VIBECODER.search(text) or _CODE_READ.search(text):
             wants_change = bool(_CODING_CHANGE.search(text))
@@ -748,7 +958,12 @@ class ModelPlanner(Planner):
                     # applies to use_skill: the plan's whole purpose is the
                     # load_skill step, and relabelling it would hide the
                     # skill.read tool from the catalog that step runs against.
-                    if base.intent.startswith("schedule") or base.intent == "use_skill":
+                    # And to filesystem: the candidate list below offers no
+                    # "filesystem" word, so a mismatch can only be confusion --
+                    # relabelling would point the fs_read step at a tool
+                    # catalog that no longer names filesystem.read.
+                    if (base.intent.startswith("schedule")
+                            or base.intent in ("use_skill", "filesystem")):
                         return base
                     replanned = self.fallback.plan(request, context=context)
                     replanned.intent = candidate
