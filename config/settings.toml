@@ -350,8 +350,8 @@ max_chars = 4000
 
 # -- Second brain (knowledge base) -------------------------------------------
 # A local, citable knowledge base over your own notes, docs and code. Index a
-# folder with `alan ingest <path>`, then ask questions in chat ("search my
-# notes for the pricing decision") or with `alan ask "..."` / `alan brain`.
+# folder with `alan brain ingest <path>`, then ask questions in chat ("search my
+# notes for the pricing decision") or with `alan brain ask "..."`.
 #
 # Retrieval is always local: lexical (SQLite FTS5) plus optional embeddings,
 # fused and returned with file:line citations. Nothing is indexed until you
@@ -360,7 +360,7 @@ max_chars = 4000
 # needed for hybrid search; without it the store still works, lexically.
 #
 # A cloud model may synthesise an answer over passages that retrieval already
-# chose (`alan ask`). Set allow_cloud_synthesis = false, or turn on
+# chose (`alan brain ask`). Set allow_cloud_synthesis = false, or turn on
 # [permissions] local_only, to keep synthesis local too.
 [knowledge]
 enabled = true

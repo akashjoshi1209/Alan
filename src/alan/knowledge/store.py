@@ -325,19 +325,33 @@ class KnowledgeStore:
 
     # -- mutation ------------------------------------------------------
     def forget(self, *, source: str | None = None, everything: bool = False) -> int:
-        """Erase whole documents. Returns the number removed; 0 if nothing matched."""
+        """Erase whole documents. Returns the number removed; 0 if nothing matched.
+
+        ``source`` matches either one exact file or every document under a
+        directory -- the same shape ``ingest`` accepts -- so forgetting a folder
+        forgets exactly what indexing that folder created, and a path with LIKE
+        wildcards in its name is still matched literally.
+        """
         with self._lock:
             if everything:
                 self._conn.execute("DELETE FROM chunks")
                 cursor = self._conn.execute("DELETE FROM documents")
             elif source:
+                clauses = ["source = ?"]
+                params: list[object] = [source]
+                for sep in ("\\", "/"):
+                    stripped = source.rstrip(sep)
+                    if stripped:
+                        clauses.append("source LIKE ? ESCAPE '\\'")
+                        params.append(_escape_like(stripped + sep) + "%")
+                where = " OR ".join(clauses)
                 self._conn.execute(
                     "DELETE FROM chunks WHERE doc_id IN "
-                    "(SELECT id FROM documents WHERE source = ?)",
-                    (source,),
+                    f"(SELECT id FROM documents WHERE {where})",
+                    params,
                 )
                 cursor = self._conn.execute(
-                    "DELETE FROM documents WHERE source = ?", (source,)
+                    f"DELETE FROM documents WHERE {where}", params
                 )
             else:
                 return 0
@@ -350,6 +364,11 @@ class KnowledgeStore:
                 self._conn.close()
         except Exception:  # noqa: BLE001 - closing twice must not raise
             pass
+
+
+def _escape_like(text: str) -> str:
+    """Escape one segment of a LIKE pattern so path characters match literally."""
+    return text.replace("\\", "\\\\").replace("%", r"\%").replace("_", r"\_")
 
 
 def fts_query(text: str, operator: str = "AND") -> str:

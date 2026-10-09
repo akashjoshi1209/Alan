@@ -206,6 +206,26 @@ class StoreTests(TempWorkspace):
         self.assertEqual(store.stats()["documents"], 0)
         self.assertEqual(store.stats()["chunks"], 0)
 
+    def test_forget_directory_prefix_removes_entire_folder(self) -> None:
+        store = self.store()
+        self._seed(store)  # notes.md + math.py under self.root
+        removed = store.forget(source=str(self.root))
+        self.assertEqual(removed, 2)
+        self.assertEqual(store.stats()["documents"], 0)
+
+    def test_forget_no_match_returns_zero(self) -> None:
+        store = self.store()
+        self._seed(store)
+        self.assertEqual(store.forget(source=str(self.root / "absent.md")), 0)
+        self.assertEqual(store.stats()["documents"], 2)
+
+    def test_forget_matches_like_special_chars_literally(self) -> None:
+        store = self.store()
+        path = self.write("notes_%1.md", "# Escaping\n\n50% of plans change.\n")
+        ingest_paths(store, [str(path)], embedder=NullEmbedder())
+        self.assertEqual(store.forget(source=str(path)), 1)
+        self.assertEqual(store.forget(source=str(path)), 0)  # nothing left
+
     def test_reopening_persists_documents(self) -> None:
         path = self.root / "kb.db"
         store = KnowledgeStore(path)

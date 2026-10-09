@@ -124,13 +124,20 @@ class KnowledgeTools(ToolProvider):
         return ToolSpec(
             name="knowledge.forget",
             description=(
-                "Remove documents from the second brain, by source path or in full. "
-                "This is destructive and cannot be undone."
+                "Remove documents from the second brain, by source path, "
+                "directory, or in full. A directory removes every document "
+                "indexed under it. This is destructive and cannot be undone."
             ),
             input_schema={
                 "type": "object",
                 "properties": {
-                    "source": {"type": "string"},
+                    "source": {
+                        "type": "string",
+                        "description": (
+                            "Exact file path, or a directory (removes every "
+                            "document indexed under it)."
+                        ),
+                    },
                     "everything": {"type": "boolean", "default": False},
                 },
             },

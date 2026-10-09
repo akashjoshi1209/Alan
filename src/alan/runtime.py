@@ -496,11 +496,11 @@ def build_runtime(
     closeables: list[Any] = [router]
 
     # The second brain is built here, before tools, so both the registry and the
-    # one-shot `alan brain` / `alan ask` commands can reach the same store. Its
-    # embedder targets the same Ollama as chat (empty base_url follows
-    # `[ollama]`), because indexing and conversation must never point at two
-    # different servers. A missing embedding model degrades to keyword search;
-    # it never blocks startup.
+    # one-shot `alan brain` commands can reach the same store. Its embedder
+    # targets the same Ollama as chat (empty base_url follows `[ollama]`),
+    # because indexing and conversation must never point at two different
+    # servers. A missing embedding model degrades to keyword search; it never
+    # blocks startup.
     knowledge: KnowledgeStore | None = None
     knowledge_embedder: Any = NullEmbedder()
     knowledge_note = "disabled"
