@@ -104,6 +104,14 @@ _CAPABILITY_HANDLERS = {
     "fs_list": "filesystem.list",
     "fs_write": "filesystem.write",
     "fs_delete": "filesystem.delete",
+    # The second brain. Mapped like every other capability, so the gate checks
+    # them and `requires_capability` counts them -- a question aimed at the
+    # user's corpus escalates to the full pipeline instead of being answered
+    # conversationally with a promise to go and look.
+    "kb_search": "knowledge.search",
+    "kb_ingest": "knowledge.ingest",
+    "kb_list": "knowledge.list",
+    "kb_forget": "knowledge.forget",
 }
 
 #: Which observations carry the authoritative record of a delegation, in the form
@@ -1009,6 +1017,11 @@ def _allowed_for(plan: Plan) -> list[str]:
         # exposing all four would invite a step to drift from its intent.
         "filesystem": ["filesystem.read", "filesystem.list",
                        "filesystem.write", "filesystem.delete"],
+        # A second-brain plan sees only the operation it was built for: the
+        # search and ingest catalogs stay narrow so a step cannot silently
+        # become a destructive forget or an unrelated index.
+        "knowledge_search": ["knowledge.search"],
+        "knowledge_ingest": ["knowledge.ingest"],
     }.get(plan.intent, [])
 
 

@@ -654,6 +654,51 @@ def _skill_plan(text: str, entry: Skill, *, explicit: bool) -> Plan:
     )
 
 
+# -- second brain -----------------------------------------------------
+#: A query aimed at the user's *own* corpus rather than the web. The noun is
+#: deliberately possessive ("my notes", "my docs", "second brain") because
+#: "search the web for the release notes" is a web search, and matching a bare
+#: "notes" would hijack it.
+_KNOWLEDGE_NOUN = re.compile(
+    r"\b(?:my\s+notes?|our\s+notes?|my\s+brain|(?:the\s+)?second\s+brain|"
+    r"knowledge\s*base|my\s+knowledge|my\s+(?:docs?|documents?|corpus)|corpus)\b",
+    re.I,
+)
+_KNOWLEDGE_VERB = re.compile(
+    r"\b(?:search|find|look\s*up|tell\s+me|remind\s+me|ask|show|query|"
+    r"what\s+do\s+i\s+know|dig)\b",
+    re.I,
+)
+_KNOWLEDGE_WHAT = re.compile(r"\bwhat\s+do\s+i\s+know\b", re.I)
+_KNOWLEDGE_INGEST = re.compile(
+    r"\b(?:ingest|re-?index|reindex|embed)\b|(?:^|\bplease\s+)index\b", re.I
+)
+_KNOWLEDGE_PATH = re.compile(
+    r"""(?P<path>(?:[A-Za-z]:[\\/]|\.{1,2}[\\/]|[\\/])[^\s"']+|[^\s"']+[\\/][^\s"']+)"""
+)
+
+
+def _knowledge_query(text: str) -> str:
+    """Strip the "search my notes for" scaffolding, leaving the topic.
+
+    The store tokenises, so a little scaffolding left in would only dilute the
+    ranking; removing it makes "what do I know about pricing" search for
+    ``pricing`` rather than for the entire question.
+    """
+    patterns = (
+        r"^\s*(?:please\s+)?(?:search|find|look\s*up|show\s+me|tell\s+me|ask|query)\s+"
+        r"(?:in\s+)?(?:my|our|the)?\s*"
+        r"(?:notes?|brain|second\s+brain|knowledge\s*base|knowledge|docs?|documents?|corpus)\s*"
+        r"(?:for|about|:)?\s*",
+        r"^\s*what\s+do\s+i\s+know\s+about\s+",
+    )
+    for pattern in patterns:
+        stripped = re.sub(pattern, "", text, flags=re.I)
+        if stripped != text and stripped.strip():
+            return stripped.strip()
+    return text.strip()
+
+
 class HeuristicPlanner(Planner):
     """Deterministic intent classification. No model required."""
 
@@ -708,6 +753,53 @@ class HeuristicPlanner(Planner):
                 complexity=1,
                 needs_memory=False,
                 rationale="request names a recurrence or clock time",
+            )
+
+        # Second-brain intent. Checked before the memory and web-research
+        # intents: "search my notes for the pricing decision" must reach the
+        # local store rather than becoming a web search, and "index D:/notes"
+        # must not become a lookup. Web research keeps precedence for anything
+        # without a possessive corpus noun, so "search the web for the release
+        # notes" is untouched.
+        if _KNOWLEDGE_INGEST.search(text) and _KNOWLEDGE_PATH.search(text):
+            paths = [match.group("path") for match in _KNOWLEDGE_PATH.finditer(text)]
+            return Plan(
+                goal=f"Index into the second brain: {text[:80]}",
+                steps=[
+                    Step(
+                        "kb_ingest",
+                        f"Index {len(paths)} path(s)",
+                        {
+                            "paths": paths,
+                            "reindex": bool(re.search(r"re-?index", text, re.I)),
+                        },
+                        RiskLevel.LOW_RISK,
+                    )
+                ],
+                category=ModelCategory.FAST,
+                intent="knowledge_ingest",
+                complexity=1,
+                needs_memory=False,
+                rationale="request names paths and an ingest verb",
+            )
+        if _KNOWLEDGE_WHAT.search(text) or (
+            _KNOWLEDGE_NOUN.search(text) and _KNOWLEDGE_VERB.search(text)
+        ):
+            query = _knowledge_query(text)
+            return Plan(
+                goal=f"Search the second brain: {query[:80]}",
+                steps=[
+                    Step(
+                        "kb_search",
+                        f"Search the second brain for: {query[:60]}",
+                        {"query": query, "top_k": 8},
+                        RiskLevel.SAFE,
+                    )
+                ],
+                category=ModelCategory.GENERAL,
+                intent="knowledge_search",
+                complexity=2,
+                rationale="request asks about the user's own corpus",
             )
 
         # Memory intent: an explicit store/forget is the whole task.

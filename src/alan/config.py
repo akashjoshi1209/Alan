@@ -350,6 +350,40 @@ class EccSettings:
 
 
 @dataclass
+class KnowledgeSettings:
+    """The second brain: a local, citable knowledge base.
+
+    On by default, because it is the point of the feature and it is safe by
+    construction: nothing is indexed until a path is named, retrieval never
+    leaves the machine, and a missing embedding model degrades to keyword search
+    instead of failing.
+
+    ``ollama_base_url`` empty means "use the same Ollama as chat", which is the
+    setting that matters: indexing and conversation must never target two
+    different servers. The store path empty means ``data/knowledge/knowledge.db``.
+    """
+
+    enabled: bool = True
+    #: Empty -> ``DATA_DIR/knowledge/knowledge.db``.
+    store_path: str = ""
+    #: Embedding model on the local Ollama server.
+    embedder: str = "nomic-embed-text"
+    #: Empty -> follow ``[ollama] base_url`` at build time.
+    ollama_base_url: str = ""
+    #: Retrieval window, in characters, and the overlap between windows.
+    chunk_size: int = 1200
+    overlap: int = 200
+    #: How many cited passages one search returns.
+    top_k: int = 8
+    #: Allow a cloud model to synthesise an answer over retrieved passages.
+    #: Ignored when ``[permissions] local_only`` is on -- both must agree before
+    #: a passage ever leaves the machine.
+    allow_cloud_synthesis: bool = True
+    #: Largest file indexed, in megabytes. Bigger files are refused with a reason.
+    max_file_mb: float = 2.0
+
+
+@dataclass
 class Settings:
     name: str = "Alan"
     provider: str = "auto"
@@ -385,6 +419,7 @@ class Settings:
     browser: BrowserSettings = field(default_factory=BrowserSettings)
     vibecoder: VibecoderSettings = field(default_factory=VibecoderSettings)
     ecc: EccSettings = field(default_factory=EccSettings)
+    knowledge: KnowledgeSettings = field(default_factory=KnowledgeSettings)
 
 
 def _provider_from_table(name: str, table: dict) -> ProviderSettings:
@@ -459,7 +494,8 @@ def _as_bool(value: Any, key: str) -> bool:
 
 def _apply_tables(settings: Settings, raw: dict) -> Settings:
     """Overlay the optional ``[memory]``, ``[permissions]``, ``[scheduler]``,
-    ``[telegram]``, ``[tools]``, ``[browser]`` and ``[vibecoder]`` tables.
+    ``[telegram]``, ``[tools]``, ``[browser]``, ``[vibecoder]``, ``[ecc]`` and
+    ``[knowledge]`` tables.
 
     Every key is optional and every section absent from settings.toml keeps its
     built-in default, so an older config file still loads unchanged.
@@ -567,6 +603,24 @@ def _apply_tables(settings: Settings, raw: dict) -> Settings:
         b.allow_download = _as_bool(
             browser.get("allow_download", b.allow_download), "browser.allow_download"
         )
+
+    kb = raw.get("knowledge", {})
+    if kb:
+        k = settings.knowledge
+        k.enabled = _as_bool(kb.get("enabled", k.enabled), "knowledge.enabled")
+        k.store_path = str(kb.get("store_path", k.store_path))
+        k.embedder = str(kb.get("embedder", k.embedder))
+        k.ollama_base_url = str(kb.get("ollama_base_url", k.ollama_base_url))
+        # Clamped, like the ECC cap: a silly window is harmless, and refusing to
+        # start over it would be the wrong kind of strict.
+        k.chunk_size = max(200, min(int(kb.get("chunk_size", k.chunk_size)), 8000))
+        k.overlap = max(0, min(int(kb.get("overlap", k.overlap)), k.chunk_size // 2))
+        k.top_k = max(1, min(int(kb.get("top_k", k.top_k)), 50))
+        k.allow_cloud_synthesis = _as_bool(
+            kb.get("allow_cloud_synthesis", k.allow_cloud_synthesis),
+            "knowledge.allow_cloud_synthesis",
+        )
+        k.max_file_mb = max(0.05, float(kb.get("max_file_mb", k.max_file_mb)))
 
     return settings
 

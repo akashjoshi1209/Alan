@@ -1019,6 +1019,146 @@ def run(
         runtime.close()
 
 
+def _knowledge_or_exit(runtime):
+    """The store, or a clean exit explaining why there is none."""
+    if runtime.knowledge is None:
+        console.print(
+            "[yellow]the second brain is off "
+            "([knowledge] enabled = false in config/settings.toml)[/yellow]"
+        )
+        raise typer.Exit(code=1)
+    return runtime.knowledge
+
+
+def _brain_answer(runtime, question: str) -> None:
+    """Retrieve cited passages, then let a model synthesise over them."""
+    from .interfaces.model import ModelCategory
+    from .knowledge import search
+    from .models.router import RoutingRequest
+
+    hits = search(
+        runtime.knowledge,
+        question,
+        embedder=runtime.knowledge_embedder,
+        top_k=runtime.settings.knowledge.top_k,
+    )
+    if not hits:
+        console.print("[dim]nothing in the second brain matches that.[/dim]")
+        console.print("[dim]index something first: alan brain ingest <path>[/dim]")
+        return
+
+    context = "\n\n".join(
+        f"[{index}] {hit.citation()}\n{hit.text.strip()}"
+        for index, hit in enumerate(hits, start=1)
+    )
+    system = (
+        "You answer questions using ONLY the numbered sources provided. "
+        "Cite sources inline as [n]. If the sources do not answer the "
+        "question, say so plainly instead of guessing."
+    )
+    messages = [{"role": "user", "content": f"Question: {question}\n\nSources:\n{context}"}]
+    # Retrieval is always local; this flag only governs whether a cloud model
+    # may read the passages. A local-only permission setting wins outright.
+    local_only = (
+        runtime.settings.permissions.local_only
+        or not runtime.settings.knowledge.allow_cloud_synthesis
+    )
+    request = RoutingRequest(
+        category=ModelCategory.REASONING, complexity=3, local_only=local_only
+    )
+    reply, provider = runtime.router.complete(messages, system=system, request=request)
+    console.print(Markdown(reply))
+    console.print(f"\n[dim]answered by {provider.describe()}[/dim]")
+    console.print("[bold]Sources[/bold]")
+    for index, hit in enumerate(hits, start=1):
+        console.print(f"[dim][{index}] {hit.citation()}[/dim]")
+
+
+@app.command()
+def brain(
+    action: str = typer.Argument(
+        "stats", help="stats, list, search, ask, ingest, reindex, forget."
+    ),
+    query: List[str] = typer.Argument(None, help="Query (search/ask), path(s) (ingest/forget)."),
+) -> None:
+    """Inspect, query or grow the second brain."""
+    from .knowledge import ingest_paths, search
+
+    runtime = _runtime()
+    try:
+        store = _knowledge_or_exit(runtime)
+        term = " ".join(query or []).strip()
+
+        if action == "stats":
+            stats = store.stats()
+            console.print(
+                f"[bold]{stats['documents']}[/bold] document(s), "
+                f"[bold]{stats['chunks']}[/bold] chunk(s), "
+                f"[bold]{stats['embedded']}[/bold] embedded"
+            )
+            console.print(f"[dim]store: {stats['path']}[/dim]")
+            console.print(f"[dim]{runtime.knowledge_note}[/dim]")
+        elif action == "list":
+            rows = store.list_documents()
+            if not rows:
+                console.print("[dim]nothing indexed yet - run `alan brain ingest <path>`[/dim]")
+            table = Table(title=f"{len(rows)} document(s)")
+            for column in ("source", "kind", "chunks", "title"):
+                table.add_column(column)
+            for row in rows:
+                table.add_row(row["source"], row["kind"], str(row["chunks"]), row["title"])
+            console.print(table)
+        elif action == "search":
+            if not term:
+                console.print('[yellow]usage: alan brain search "QUERY"[/yellow]')
+                raise typer.Exit(code=1)
+            hits = search(
+                store, term,
+                embedder=runtime.knowledge_embedder,
+                top_k=runtime.settings.knowledge.top_k,
+            )
+            if not hits:
+                console.print("[dim]no matching passages[/dim]")
+            for hit in hits:
+                console.print(f"\n[bold]{hit.citation()}[/bold] [dim]({hit.score:.4f})[/dim]")
+                console.print(hit.text.strip()[:600])
+        elif action == "ask":
+            if not term:
+                console.print('[yellow]usage: alan brain ask "QUESTION"[/yellow]')
+                raise typer.Exit(code=1)
+            _brain_answer(runtime, term)
+        elif action in ("ingest", "reindex"):
+            if not query:
+                console.print("[yellow]usage: alan brain ingest <path> [<path>...][/yellow]")
+                raise typer.Exit(code=1)
+            kb = runtime.settings.knowledge
+            report = ingest_paths(
+                store,
+                list(query),
+                embedder=runtime.knowledge_embedder,
+                chunk_size=kb.chunk_size,
+                overlap=kb.overlap,
+                max_bytes=int(kb.max_file_mb * 1_000_000),
+                reindex=(action == "reindex"),
+            )
+            console.print(f"[green]{report.describe()}[/green]")
+            for error in report.errors[:10]:
+                console.print(f"[dim]  - {error}[/dim]")
+        elif action == "forget":
+            if not term:
+                console.print("[yellow]usage: alan brain forget <source-path>[/yellow]")
+                raise typer.Exit(code=1)
+            removed = store.forget(source=term)
+            console.print(f"[green]removed {removed} document(s)[/green]")
+        else:
+            console.print(
+                "[yellow]usage: alan brain [stats|list|search|ask|ingest|reindex|forget][/yellow]"
+            )
+            raise typer.Exit(code=1)
+    finally:
+        runtime.close()
+
+
 def main() -> None:
     app()
 

@@ -347,3 +347,42 @@ root = ""
 # skill would otherwise fill a 2048-token local model's whole context
 # window; the rest stays reachable with `alan skills --read <name>`.
 max_chars = 4000
+
+# -- Second brain (knowledge base) -------------------------------------------
+# A local, citable knowledge base over your own notes, docs and code. Index a
+# folder with `alan ingest <path>`, then ask questions in chat ("search my
+# notes for the pricing decision") or with `alan ask "..."` / `alan brain`.
+#
+# Retrieval is always local: lexical (SQLite FTS5) plus optional embeddings,
+# fused and returned with file:line citations. Nothing is indexed until you
+# name a path. Embeddings use the same Ollama as chat (empty ollama_base_url
+# follows [ollama] base_url), so `ollama pull nomic-embed-text` is all that is
+# needed for hybrid search; without it the store still works, lexically.
+#
+# A cloud model may synthesise an answer over passages that retrieval already
+# chose (`alan ask`). Set allow_cloud_synthesis = false, or turn on
+# [permissions] local_only, to keep synthesis local too.
+[knowledge]
+enabled = true
+
+# Where the store lives. Empty -> data\knowledge\knowledge.db.
+store_path = ""
+
+# Embedding model on the local Ollama server.
+embedder = "nomic-embed-text"
+
+# Empty -> use [ollama] base_url. Set only to embed against another server.
+ollama_base_url = ""
+
+# Retrieval window (characters) and overlap between windows.
+chunk_size = 1200
+overlap = 200
+
+# Cited passages returned per search.
+top_k = 8
+
+# Let a cloud model synthesise over retrieved passages. local_only wins if on.
+allow_cloud_synthesis = true
+
+# Largest single file indexed, in MB. Larger files are refused with a reason.
+max_file_mb = 2.0

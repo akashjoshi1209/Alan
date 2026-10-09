@@ -29,6 +29,7 @@ from .interfaces.capabilities import BrowserProvider
 from .interfaces.memory import MemoryProvider
 from .interfaces.model import as_model_provider
 from .interfaces.types import PermissionRequest, RiskLevel, ToolSpec
+from .knowledge import KnowledgeStore, NullEmbedder, build_embedder
 from .llm import _construct, known_providers
 from .llm.base import ProviderError
 from .memory.providers import build_memory_provider
@@ -41,6 +42,7 @@ from .tools.browser import SidecarBrowser
 from .tools.coding import LocalCoding
 from .tools.execution import LocalExecution
 from .tools.internet import Internet
+from .tools.knowledge import KnowledgeTools
 from .tools.registry import ToolRegistry
 from .tools.schedule import ScheduleTools
 from .tools.standard import StandardTools
@@ -65,6 +67,12 @@ class AlanRuntime:
     browser: BrowserProvider | None = None
     #: Zero-config web backends (Exa + Jina Reader) behind the web.* tools.
     internet: Internet | None = None
+    #: The second brain: a local, citable knowledge store. ``None`` when
+    #: ``[knowledge] enabled = false``.
+    knowledge: KnowledgeStore | None = None
+    #: The embedder the knowledge tools use, so one-shot commands search and
+    #: ingest through exactly the same vectors as a chat run.
+    knowledge_embedder: Any = None
     #: Unattended permission requests, waiting for a human decision.
     approvals: ApprovalQueue | None = None
     #: Background task loop. ``None`` when ``[scheduler] enabled = false``.
@@ -77,6 +85,9 @@ class AlanRuntime:
     browser_note: str = ""
     internet_note: str = ""
     vibecoder_note: str = ""
+    #: Second-brain state for ``alan doctor``: doc/chunk counts and whether
+    #: embeddings are live or degraded to lexical-only.
+    knowledge_note: str = ""
     #: ECC catalog state for ``alan doctor``: counts and root when loaded,
     #: why not when it isn't. Empty means tools were not registered at all.
     ecc_note: str = ""
@@ -123,6 +134,11 @@ class AlanRuntime:
                 else "not registered"
             ),
             "ecc": self.ecc_note or "not registered",
+            "knowledge": (
+                {"enabled": True, "note": self.knowledge_note, **self.knowledge.stats()}
+                if self.knowledge is not None
+                else {"enabled": False, "note": self.knowledge_note or "disabled"}
+            ),
             "telegram": (
                 {
                     "enabled": True,
@@ -479,6 +495,33 @@ def build_runtime(
     registry = ToolRegistry(gate, bus=bus)
     closeables: list[Any] = [router]
 
+    # The second brain is built here, before tools, so both the registry and the
+    # one-shot `alan brain` / `alan ask` commands can reach the same store. Its
+    # embedder targets the same Ollama as chat (empty base_url follows
+    # `[ollama]`), because indexing and conversation must never point at two
+    # different servers. A missing embedding model degrades to keyword search;
+    # it never blocks startup.
+    knowledge: KnowledgeStore | None = None
+    knowledge_embedder: Any = NullEmbedder()
+    knowledge_note = "disabled"
+    if settings.knowledge.enabled:
+        knowledge_embedder = build_embedder(
+            settings.knowledge.embedder,
+            settings.knowledge.ollama_base_url or settings.ollama.base_url,
+        )
+        knowledge_path = (
+            Path(settings.knowledge.store_path)
+            if settings.knowledge.store_path
+            else DATA_DIR / "knowledge" / "knowledge.db"
+        )
+        knowledge = KnowledgeStore(knowledge_path)
+        ok, reason = knowledge_embedder.available()
+        knowledge_note = (
+            f"embeddings ready ({reason})" if ok
+            else f"{settings.knowledge.embedder}: {reason}"
+        )
+        closeables.append(knowledge)
+
     if register_tools:
         registry.register_provider(
             StandardTools(
@@ -497,6 +540,17 @@ def build_runtime(
         # produce a broken step, so both halves of that contract switch on and
         # off together (and only with register_tools at all).
         ecc_catalog, ecc_note = _register_ecc(registry, settings)
+        if knowledge is not None:
+            registry.register_provider(
+                KnowledgeTools(
+                    knowledge,
+                    knowledge_embedder,
+                    top_k=settings.knowledge.top_k,
+                    chunk_size=settings.knowledge.chunk_size,
+                    overlap=settings.knowledge.overlap,
+                    max_file_mb=settings.knowledge.max_file_mb,
+                )
+            )
         closeables.append(registry)
     else:
         vibecoder_note = ""
@@ -570,9 +624,12 @@ def build_runtime(
         model_note=model_note,
         browser_note=browser_note,
         internet_note=internet_note,
+        knowledge=knowledge,
+        knowledge_embedder=knowledge_embedder,
         trace_path=trace_path,
         vibecoder_note=vibecoder_note,
         ecc_note=ecc_note,
+        knowledge_note=knowledge_note,
     )
     runtime._closeables = closeables
     if memory is not None:
