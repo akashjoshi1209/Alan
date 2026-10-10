@@ -386,3 +386,44 @@ allow_cloud_synthesis = true
 
 # Largest single file indexed, in MB. Larger files are refused with a reason.
 max_file_mb = 2.0
+
+# -- Always-on daemon (Phase 2) ----------------------------------------------
+# Turns Alan from on-demand into always-on. It owns a tick loop, a
+# single-instance lock, and the append-only event timeline that later phases
+# write into.
+#
+#   enabled        false builds no daemon: no thread, no lock, no timeline, and
+#                  `alan daemon start` says so rather than starting one.
+#   tick_seconds   how often the loop ticks. Clamped to >= 1: a sub-second tick
+#                  spins the disk, and a tick of hours makes the kill switch
+#                  feel broken.
+#   lock_path      Empty -> data\daemon\alan-daemon.lock. A second daemon
+#                  cannot start while this is held, and because the OS holds
+#                  it, a crash releases it -- there is no stale lock for you
+#                  to be told to delete by hand.
+#   store_path     Empty -> data\timeline\timeline.db.
+#   retention_days raw events older than this are dropped once at start-up,
+#                  not every tick. Short raw retention with summaries kept
+#                  longer (roadmap 4.3): `alan timeline digest` reads the log,
+#                  it does not live in it.
+#
+# Turning this on does NOT turn capture on. This slice has no sensing at all:
+# the loop records its own heartbeat and nothing else, which is why it ships
+# off -- a daemon that only appends heartbeats is churn, not awareness.
+# Activity sensing and screen understanding are later phases with their own
+# switches, and 4.3 must ship OFF by default with an allow-list, redaction, a
+# visible indicator and a pause/purge before it runs at all.
+#
+# Once it runs:
+#   alan daemon status      read-only: running or not, who holds the lock
+#   alan daemon start       background;  --foreground runs it in this terminal
+#   alan daemon stop        writes one flag file; the loop leaves on its next
+#                           tick and releases its own lock, so the shutdown
+#                           flushes rather than being cut short
+#   alan timeline recent    the raw log     alan timeline digest   the summary
+[daemon]
+enabled = false
+tick_seconds = 30.0
+lock_path = ""
+store_path = ""
+retention_days = 14.0

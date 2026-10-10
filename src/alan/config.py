@@ -631,3 +631,47 @@ def get_api_key(provider: str) -> str | None:
         return None
     value = os.environ.get(env, "").strip()
     return value or None
+@dataclass
+class DaemonSettings:
+    """Always-on awareness (Phase 2, roadmap section 4).
+
+    **Off by default, and that is the design.** The daemon is the part of
+    Alan that watches the machine, and principle 1 says autonomy is earned per
+    capability. Nothing is sensed, logged or retained until this is switched
+    on deliberately: section 4.3's "OFF by default" is easiest to honour at
+    the one place it cannot be forgotten.
+
+    Turning the daemon on does **not** turn capture on. This slice owns the
+    loop and the timeline; activity sensing (4.2) and screen understanding
+    (4.3) arrive later behind their own switches, and neither is implemented
+    here.
+    """
+
+    enabled: bool = False
+    #: Empty -> ``DATA_DIR/daemon/alan-daemon.lock``.
+    lock_path: str = ""
+    #: Empty -> ``DATA_DIR/timeline/timeline.db``.
+    store_path: str = ""
+    #: How often the loop ticks. Thirty seconds keeps the kill switch feeling
+    #: instant without waking the disk for nothing.
+    tick_seconds: float = 30.0
+    #: Raw retention, in days. Section 4.3 asks for short raw retention with
+    #: derived summaries kept longer; a digest is a view over the log, so
+    #: pruning rows does not prune what was learned from them.
+    retention_days: float = 14.0
+
+
+    daemon: DaemonSettings = field(default_factory=DaemonSettings)
+    dn = raw.get("daemon", {})
+    if dn:
+        d = settings.daemon
+        d.enabled = _as_bool(dn.get("enabled", d.enabled), "daemon.enabled")
+        d.lock_path = str(dn.get("lock_path", d.lock_path))
+        d.store_path = str(dn.get("store_path", d.store_path))
+        # Clamped low: a sub-second tick would spin the disk, and a tick of
+        # hours would make the kill switch feel broken.
+        d.tick_seconds = max(1.0, float(dn.get("tick_seconds", d.tick_seconds)))
+        d.retention_days = max(
+            0.0, min(float(dn.get("retention_days", d.retention_days)), 3650.0)
+        )
+

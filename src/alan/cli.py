@@ -1365,3 +1365,247 @@ def _task_detail(task: Any) -> str:
 
 if __name__ == "__main__":
     main()
+import os
+import subprocess
+from pathlib import Path
+def _stop_daemon(settings) -> None:
+    """Write the kill switch for a configured daemon. Opens no database.
+
+    Stopping is the one action that must work when everything else is broken,
+    so it touches exactly one file -- the flag the loop already checks -- and
+    nothing that could itself fail to open.
+    """
+    from .core.daemon import resolve_daemon_paths, stop_flag_for
+
+    lock_path, _ = resolve_daemon_paths(settings)
+    flag = stop_flag_for(lock_path)
+    flag.parent.mkdir(parents=True, exist_ok=True)
+    flag.write_text(time.strftime("%Y-%m-%dT%H:%M:%S%z"), encoding="utf-8")
+    console.print(f"[yellow]stop requested[/yellow] via {flag.name}")
+    console.print("[dim]the daemon exits on its next tick, releasing its lock.[/dim]")
+
+
+def _daemon_status(settings) -> None:
+    """Report whether a daemon runs, without building one.
+
+    ``status`` is read-only, so it does not open the timeline (opening it
+    *creates* it, which is not what asking a question should do) and it does
+    not ask a freshly constructed ``Daemon`` whether it is running -- that
+    object has no loop and would answer "stopped" while a daemon ran in the
+    next process.
+
+    The lock is the only honest signal, and it is probed the same way the
+    daemon itself would: take it and give it straight back. If we get it,
+    nobody holds it; if we do not, someone does, and the pid file says who.
+    The probe writes our pid only when it succeeds, and releasing then unlinks
+    it, so a real holder's pid is never overwritten.
+    """
+    from .core.daemon import resolve_daemon_paths
+
+    lock_path, store_path = resolve_daemon_paths(settings)
+    from .core.daemon import SingleInstance
+
+    lock = SingleInstance(lock_path)
+    held_elsewhere = not lock.acquire()
+    holder = lock.holder_pid() if held_elsewhere else 0
+    if not held_elsewhere:
+        lock.release()
+
+    console.print(
+        f"[bold]{'running' if held_elsewhere else 'stopped'}[/bold] "
+        f"(tick every {settings.daemon.tick_seconds:.0f}s)"
+    )
+    if held_elsewhere:
+        console.print(f"[dim]held by pid {holder or 'unknown'}[/dim]")
+    console.print(f"[dim]lock: {lock_path}[/dim]")
+    if store_path.exists():
+        from .core.timeline import TimelineStore
+
+        store = TimelineStore(store_path)
+        try:
+            console.print(f"[dim]timeline: {store.count()} event(s)[/dim]")
+        finally:
+            store.close()
+    else:
+        console.print("[dim]timeline: none yet[/dim]")
+    console.print(
+        "[dim]sensing: not implemented in this phase -- heartbeats only[/dim]"
+    )
+    if not settings.daemon.enabled:
+        console.print("[dim]daemon.enabled = false[/dim]")
+
+
+@app.command()
+def daemon(
+    action: str = typer.Argument(
+        "status", help="start, stop, status, tick, digest."
+    ),
+    foreground: bool = typer.Option(
+        False, "--foreground", "-f", help="Run in this terminal until stopped."
+    ),
+) -> None:
+    """Run or inspect the always-on daemon (Phase 2).
+
+    **Off until switched on, and it captures nothing.** This slice owns the
+    loop, the single-instance lock and the event timeline. Activity sensing and
+    screen understanding are later phases behind their own switches, so
+    turning the daemon on does not turn capture on.
+    """
+    from .core.daemon import build_daemon
+
+    settings = load_settings()
+
+    if action == "stop":
+        _stop_daemon(settings)
+        return
+
+    if action == "status":
+        _daemon_status(settings)
+        return
+
+    if not settings.daemon.enabled:
+        console.print("[yellow]the daemon is off.[/yellow] Nothing is running.")
+        console.print(
+            "Set [bold]daemon.enabled = true[/bold] in [bold]"
+            f"{SETTINGS_FILE}[/bold] to run it."
+        )
+        raise typer.Exit(code=1)
+
+    daemon = build_daemon(settings)
+    try:
+        if action == "tick":
+            notes = daemon.tick()
+            for note in notes:
+                console.print(f"[green]{note}[/green]")
+            console.print(
+                f"[dim]{daemon.timeline.count()} event(s) in the timeline[/dim]"
+            )
+
+        elif action == "start":
+            if not daemon.lock.acquire():
+                holder = daemon.lock.holder_pid()
+                detail = f" (held by pid {holder})" if holder else ""
+                console.print(f"[yellow]already running{detail}[/yellow]")
+                raise typer.Exit(code=0)
+            daemon.lock.release()
+
+            if foreground:
+                console.print(
+                    "[green]daemon running[/green] in this terminal; "
+                    "press Ctrl+C to stop."
+                )
+                try:
+                    daemon.start()
+                    while daemon.running:
+                        time.sleep(0.25)
+                except KeyboardInterrupt:
+                    console.print("\n[dim]stopping...[/dim]")
+                finally:
+                    daemon.stop()
+            else:
+                _start_daemon_detached()
+                console.print("[green]daemon started[/green] in the background.")
+                console.print("[dim]alan daemon status  |  alan daemon stop[/dim]")
+
+        elif action == "digest":
+            digest = daemon.timeline.digest()
+            console.print(digest.render())
+
+        else:
+            console.print(
+                "[yellow]usage: alan daemon "
+                "[start|stop|status|tick|digest][/yellow]"
+            )
+            raise typer.Exit(code=1)
+    finally:
+        daemon.timeline.close()
+
+
+def _start_daemon_detached() -> None:
+    """Spawn this command again, in the foreground, detached from the terminal.
+
+    A ``daemon=True`` thread dies with its process, so an in-process "start"
+    would return a prompt and a daemon that had already been reaped. The work
+    has to happen in a child that outlives this one -- and that child runs the
+    *same* command, so there is one code path rather than two that can drift.
+    """
+    argv = [sys.executable, "-m", "alan", "daemon", "start", "--foreground"]
+    kwargs: dict[str, Any] = {
+        "stdin": subprocess.DEVNULL,
+        "stdout": subprocess.DEVNULL,
+        "stderr": subprocess.DEVNULL,
+        "close_fds": True,
+        "cwd": str(HOME),
+    }
+    if os.name == "nt":
+        kwargs["creationflags"] = (
+            subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
+        )
+    else:  # pragma: no cover - exercised on the platform that has it
+        kwargs["start_new_session"] = True
+    subprocess.Popen(argv, **kwargs)
+
+
+@app.command()
+def timeline(
+    action: str = typer.Argument("recent", help="recent, digest, days, purge."),
+    count: int = typer.Option(20, "--count", "-n", help="Rows to show."),
+    days: float = typer.Option(
+        14.0, "--days", help="Retention window for purge."
+    ),
+) -> None:
+    """Read the local event timeline (Phase 2). Append-only.
+
+    Read-only except for an explicit, age-bounded ``purge`` -- the retention
+    policy, made callable rather than hidden behind a helper that deletes more
+    than it says.
+    """
+    from .config import DATA_DIR
+    from .core.timeline import TimelineStore
+
+    settings = load_settings()
+    store_path = (
+        Path(settings.daemon.store_path)
+        if settings.daemon.store_path
+        else DATA_DIR / "timeline" / "timeline.db"
+    )
+    if not store_path.exists() and action in ("recent", "digest", "days"):
+        console.print("[dim]no timeline yet -- the daemon has not run.[/dim]")
+        return
+
+    store = TimelineStore(store_path)
+    try:
+        if action == "recent":
+            events = store.recent(limit=count)
+            if not events:
+                console.print("[dim]the timeline is empty.[/dim]")
+                return
+            for event in events:
+                subject = event.project or event.app or ""
+                label = f" [dim]{subject}[/dim]" if subject else ""
+                console.print(
+                    f"[dim]{event.ts}[/dim] [cyan]{event.kind}[/cyan]{label}"
+                )
+                if event.title:
+                    console.print(f"    {event.title}")
+            console.print(f"[dim]{len(events)} event(s)[/dim]")
+        elif action == "digest":
+            console.print(store.digest().render())
+        elif action == "days":
+            listed = store.days()
+            if not listed:
+                console.print("[dim]no days recorded.[/dim]")
+            for day in listed:
+                console.print(day)
+        elif action == "purge":
+            removed = store.purge_older_than(days)
+            console.print(f"[green]removed {removed} event(s)[/green] older than {days:g}d")
+        else:
+            console.print(
+                "[yellow]usage: alan timeline [recent|digest|days|purge][/yellow]"
+            )
+            raise typer.Exit(code=1)
+    finally:
+        store.close()
+
+
