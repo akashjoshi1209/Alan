@@ -245,9 +245,17 @@ class RecorderLogicTest(unittest.TestCase):
     def test_continuous_speech_is_cut_off_at_max_seconds(self) -> None:
         import time
 
+        # The margin here is deliberately wider than one Windows timer tick.
+        # `time.sleep` rounds down to the machine's tick (15.6 ms by default),
+        # so `sleep(0.06)` measurably returns in ~47 ms on a loaded box --
+        # which is *less* than the 50 ms cap this test used to set, making the
+        # assertion fail roughly one run in five on Windows and never on a
+        # machine with a finer clock. The behaviour under test is a backstop
+        # firing once elapsed time passes a cap; it does not need the two
+        # numbers to be 10 ms apart to be tested.
         detector = recorder.SilenceDetector(threshold=500, silence_ms=1000, max_seconds=0.05)
         self.assertFalse(detector.feed(2000, 64.0))  # speaking, under the cap
-        time.sleep(0.06)
+        time.sleep(0.25)
         self.assertTrue(detector.feed(2000, 64.0))  # elapsed past the cap
 
     def test_a_loud_word_restarts_the_silence_clock(self) -> None:
