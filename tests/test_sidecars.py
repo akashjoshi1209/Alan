@@ -13,6 +13,7 @@ import os
 import shutil
 import socket
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -120,6 +121,52 @@ class EnsureDetachedTest(_HomeTest):
     def test_a_failed_start_is_swallowed(self) -> None:
         with mock.patch("subprocess.Popen", side_effect=OSError("no")):
             sidecars._start_detached(["does-not-matter"])
+
+
+class StartBreadcrumbTest(_HomeTest):
+    """One boot in flight at a time -- the race that kills a 4GB machine."""
+
+    def _booting_sidecar(self) -> None:
+        """A home whose launchers exist and whose cognee is down mid-boot."""
+        self._install_launchers()
+
+    def test_a_fresh_breadcrumb_holds_the_next_start(self) -> None:
+        self._booting_sidecar()
+        os.environ["ALAN_NO_OLLAMA"] = "1"  # isolate to cognee
+        sidecars._mark_starting(self.home, "cognee")
+        with mock.patch.object(sidecars, "listening", return_value=False), \
+                mock.patch.object(sidecars, "_start_detached") as start:
+            sidecars.ensure_detached(self.home)
+        start.assert_not_called()
+
+    def test_a_stale_breadcrumb_allows_a_retry(self) -> None:
+        # A start that died without ever answering must not block retries
+        # forever: past the window, the next chat may try again.
+        self._booting_sidecar()
+        os.environ["ALAN_NO_OLLAMA"] = "1"
+        sidecars._mark_starting(self.home, "cognee")
+        flag = sidecars._flag_path(self.home, "cognee")
+        stale = time.time() - sidecars._START_FLAG_SECONDS - 1
+        os.utime(flag, (stale, stale))
+        with mock.patch.object(sidecars, "listening", return_value=False), \
+                mock.patch.object(sidecars, "_start_detached") as start:
+            sidecars.ensure_detached(self.home)
+        start.assert_called_once()
+
+    def test_a_start_leaves_its_breadcrumb(self) -> None:
+        self._booting_sidecar()
+        with mock.patch.object(sidecars, "listening", return_value=False), \
+                mock.patch.object(sidecars, "_start_detached"):
+            sidecars.ensure_detached(self.home)
+        self.assertTrue(sidecars._flag_path(self.home, "cognee").is_file())
+        self.assertTrue(sidecars._flag_path(self.home, "ollama").is_file())
+
+    def test_an_up_sidecar_leaves_no_breadcrumb(self) -> None:
+        self._booting_sidecar()
+        with mock.patch.object(sidecars, "listening", return_value=True), \
+                mock.patch.object(sidecars, "_start_detached"):
+            sidecars.ensure_detached(self.home)
+        self.assertFalse(sidecars._flag_path(self.home, "cognee").exists())
 
 
 class LauncherWiringTest(unittest.TestCase):

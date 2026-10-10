@@ -60,12 +60,23 @@ if ((Test-Path $ollamaExe) -and ($env:ALAN_NO_OLLAMA -ne '1')) {
 # opening a chat window must not queue behind a sidecar's boot or narrate it.
 # Until cognee answers, memory falls back to the local JSON store -- `alan
 # doctor` names which one is in use, so the fallback is visible, never silent.
+#
+# The starting-cognee.flag breadcrumb is the same file alan.sidecars writes,
+# so two launchers -- or two chats opened a second apart -- cannot boot the
+# same sidecar twice and kill each other for RAM.
 $cmd = if ($args.Count -eq 0) { 'chat' } else { [string]$args[0] }
 $cogneePy = Join-Path $root 'env\cognee\python\python.exe'
 if (($cmd -in @('chat', 'ask')) -and ($env:ALAN_NO_MEMORY -ne '1') -and (Test-Path $cogneePy)) {
     $serve = Join-Path $root 'scripts\cognee-serve.ps1'
-    if ((Test-Path $serve) -and (-not (Test-Port 8012))) {
+    $flag = Join-Path $root 'data\starting-cognee.flag'
+    $booting = $false
+    if (Test-Path $flag) {
+        $booting = ((Get-Date) - (Get-Item $flag).LastWriteTime).TotalSeconds -lt 300
+    }
+    if ((Test-Path $serve) -and (-not (Test-Port 8012)) -and (-not $booting)) {
         try {
+            New-Item -ItemType Directory -Force -Path (Split-Path -Parent $flag) | Out-Null
+            New-Item -ItemType File -Force -Path $flag | Out-Null
             Start-Process -FilePath 'powershell' -ArgumentList '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $serve -WindowStyle Hidden
         } catch { Write-Warning "Memory sidecar did not start; continuing without memory." }
     }

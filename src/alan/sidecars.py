@@ -19,6 +19,7 @@ import os
 import socket
 import subprocess
 import sys
+import time
 from pathlib import Path
 from typing import Sequence
 
@@ -26,6 +27,12 @@ from .config import HOME
 
 COGNEE_PORT = 8012
 OLLAMA_PORT = 11435
+
+#: A sidecar that has not answered within this window is assumed dead and is
+#: started again; until then, one boot in flight holds off the next. Five
+#: minutes is far beyond a normal boot (cognee ~1-2 min cold, ollama seconds)
+#: and far below "never": a crashed start still gets retried.
+_START_FLAG_SECONDS = 300
 
 
 def listening(port: int) -> bool:
@@ -39,6 +46,35 @@ def listening(port: int) -> bool:
             return True
     except OSError:
         return False
+
+
+def _flag_path(root: Path, name: str) -> Path:
+    return root / "data" / f"starting-{name}.flag"
+
+
+def _started_recently(root: Path, name: str) -> bool:
+    """Has an ensure tried to start this sidecar in the last few minutes?
+
+    Fire-and-forget has a race without this: two chats opened a second apart
+    both see the port down (a boot takes longer than a second), both start a
+    sidecar, and on a small machine both die for RAM. The breadcrumb closes
+    it -- the same file, with the same window, that ``scripts\\run.ps1``
+    honours, so the two launchers hold each other off too.
+    """
+    try:
+        age = time.time() - _flag_path(root, name).stat().st_mtime
+    except OSError:
+        return False
+    return age < _START_FLAG_SECONDS
+
+
+def _mark_starting(root: Path, name: str) -> None:
+    flag = _flag_path(root, name)
+    try:
+        flag.parent.mkdir(parents=True, exist_ok=True)
+        flag.touch()
+    except OSError:
+        pass  # a home we cannot write is a home whose starts may duplicate
 
 
 def _start_detached(args: Sequence[str]) -> None:
@@ -74,7 +110,13 @@ def ensure_detached(home: Path | None = None) -> None:
     if os.environ.get("ALAN_NO_MEMORY") != "1":
         serve = root / "scripts" / "cognee-serve.ps1"
         runtime = root / "env" / "cognee" / "python" / "python.exe"
-        if serve.is_file() and runtime.is_file() and not listening(COGNEE_PORT):
+        if (
+            serve.is_file()
+            and runtime.is_file()
+            and not listening(COGNEE_PORT)
+            and not _started_recently(root, "cognee")
+        ):
+            _mark_starting(root, "cognee")
             _start_detached(
                 [
                     "powershell",
@@ -87,9 +129,14 @@ def ensure_detached(home: Path | None = None) -> None:
             )
     if os.environ.get("ALAN_NO_OLLAMA") != "1":
         exe = root / "env" / "ollama" / "ollama.exe"
-        if exe.is_file() and not listening(OLLAMA_PORT):
+        if (
+            exe.is_file()
+            and not listening(OLLAMA_PORT)
+            and not _started_recently(root, "ollama")
+        ):
             # The sidecar reads these from its own environment; a fresh
             # detached process does not inherit the launcher's anymore.
             os.environ.setdefault("OLLAMA_MODELS", str(root / "models"))
             os.environ.setdefault("OLLAMA_HOST", f"127.0.0.1:{OLLAMA_PORT}")
+            _mark_starting(root, "ollama")
             _start_detached([str(exe), "serve"])
