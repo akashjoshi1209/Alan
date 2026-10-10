@@ -1,4 +1,4 @@
-# Alan portable launcher
+# Alan launcher
 # Usage:  scripts\run.ps1              -> interactive chat
 #         scripts\run.ps1 ask "hi"     -> one-shot question
 #         scripts\run.ps1 providers    -> show backend status
@@ -13,7 +13,7 @@ $py = Join-Path $pyDir 'python.exe'
 $ollamaPort = 11435
 
 if (-not (Test-Path $py)) {
-    Write-Error "Portable Python not found at $py. Re-run the setup."
+    Write-Error "Alan's Python not found at $py. Re-run the setup."
     exit 1
 }
 
@@ -24,7 +24,7 @@ $env:PYTHONUTF8 = '1'
 $env:PYTHONDONTWRITEBYTECODE = '1'
 $env:PATH = $pyDir + ';' + (Join-Path $pyDir 'Scripts') + ';' + $env:PATH
 
-# Start the bundled Ollama server (models live on the USB) if it is not already up.
+# Start the bundled Ollama server (models live in models\) if it is not already up.
 $ollamaExe = Join-Path $root 'env\ollama\ollama.exe'
 if ((Test-Path $ollamaExe) -and ($env:ALAN_NO_OLLAMA -ne '1')) {
     $env:OLLAMA_MODELS = (Join-Path $root 'models')

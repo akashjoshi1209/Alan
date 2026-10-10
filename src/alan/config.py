@@ -1,7 +1,7 @@
 """Alan - configuration and paths.
 
-Everything is resolved relative to the project root on the USB so the whole
-assistant stays portable. Set ALAN_HOME to override the detected root.
+Everything is resolved relative to the project root, so one folder holds the
+whole assistant. Set ALAN_HOME to override the detected root.
 """
 
 from __future__ import annotations
@@ -231,7 +231,7 @@ class TelegramSettings:
     all, starts no thread and never touches the network. When configured, only
     ``chat_id`` may decide -- anyone else is ignored entirely. The bridge
     long-polls the Telegram Bot API (Alan dials out), so there is no webhook,
-    no open port and nothing for the stick's network to expose.
+    no open port and nothing for the local network to expose.
     """
 
     enabled: bool = True

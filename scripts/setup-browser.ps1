@@ -1,6 +1,6 @@
 # Alan - build the browser-use sidecar environment
 # ---------------------------------------------------------------------------
-# Creates env\browser\python (an isolated copy of Alan's portable Python) and
+# Creates env\browser\python (an isolated copy of Alan's bundled Python) and
 # installs browser-use into it. Idempotent: safe to re-run.
 #
 # WHY A SEPARATE ENVIRONMENT
@@ -24,7 +24,7 @@ $dstPy = Join-Path $root 'env\browser\python'
 $py    = Join-Path $dstPy 'python.exe'
 
 if (-not (Test-Path (Join-Path $srcPy 'python.exe'))) {
-    Write-Error "Base portable Python not found at $srcPy."
+    Write-Error "Base Python not found at $srcPy."
     exit 1
 }
 

@@ -147,9 +147,9 @@ class RepoAnalysis:
     #: Human-readable command, for showing the user or briefing an agent.
     test_command: str = ""
     #: The same command as an argv list, for execution. Kept separate from
-    #: ``test_command`` because a portable install path can contain spaces, and
-    #: splitting a display string to execute it is exactly the bug that a
-    #: self-contained product on removable media will hit.
+    #: ``test_command`` because an install path can contain spaces, and
+    #: splitting a display string to execute it is exactly the bug this
+    #: design exists to avoid.
     test_argv: list[str] = field(default_factory=list)
     conventions: list[str] = field(default_factory=list)
     notes: str = ""

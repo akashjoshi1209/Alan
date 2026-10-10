@@ -9,8 +9,8 @@ instead of failing:
     json   -> the dependency-free local store
     none   -> no memory
 
-The fallback matters: Alan must stay useful when the sidecar is down, which on a
-portable USB stick is a normal occurrence, not an exception.
+The fallback matters: Alan must stay useful when the sidecar is down, which is
+a normal occurrence, not an exception.
 """
 
 from __future__ import annotations

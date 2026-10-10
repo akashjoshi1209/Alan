@@ -1,4 +1,4 @@
-# Open a shell with Alan's portable environment activated.
+# Open a shell with Alan's environment activated.
 # Then you can run things like:  python -m alan chat
 $root = Split-Path -Parent $PSScriptRoot
 $pyDir = Join-Path $root 'env\python'

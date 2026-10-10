@@ -12,7 +12,7 @@ Three things shape this adapter:
   Ollama server, so Alan remains keyless and offline.
 * **Telemetry off.** mem0 ships posthog as a hard dependency. ``MEM0_TELEMETRY``
   is forced off before the import, because brief section 16 forbids unsolicited
-  telemetry in a portable product.
+  telemetry.
 
 mem0 returns ``{"results": [...]}`` with its own memory records. Those are
 mapped onto :class:`MemoryItem` here so the rest of Alan never sees a mem0 type.

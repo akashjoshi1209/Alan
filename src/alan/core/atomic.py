@@ -1,7 +1,7 @@
 """Crash-safe file writes shared by Alan's stores.
 
 Both memory providers persist through a temp file and a rename. Two details
-matter on Windows and on a slow removable drive:
+matter on Windows, and on a slow or busy disk:
 
 * **The temp name must be unique per write.** A shared ``L2.tmp`` collides when
   a background writer and a foreground reader write the same level at the same

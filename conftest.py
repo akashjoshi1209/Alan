@@ -1,6 +1,6 @@
 """Put ``src`` on ``sys.path`` so the suite runs from a bare checkout.
 
-Alan is a portable install with no packaging step: there is no ``setup.py``,
+Alan is a bare source tree with no packaging step: there is no ``setup.py``,
 no ``pyproject.toml``, nothing to install, and ``src`` exists precisely so the
 package is importable without polluting the host's site-packages. That leaves
 ``src`` out of the path for anything that does not set ``PYTHONPATH``, which

@@ -3,16 +3,23 @@
 ## What Alan is
 
 One folder, zero host installs. Everything needed -- interpreter, libraries,
-model runtime, memory store, code -- sits inside the `Alan\` directory on
-whatever drive it happens to be plugged into.
+model runtime, memory store, code -- sits inside the `Alan\` directory, and
+Alan finds that directory from its own code, so the folder can be moved or
+copied without a reinstall.
 
 Two properties drive every decision below:
 
-1. **Portable.** `D:\Alan` and `F:\Alan` must behave identically. Nothing may
-   depend on a drive letter, on `PATH`, or on something being installed.
-2. **Bounded.** A portable assistant runs on an unknown machine, unattended. It
-   may not be able to do arbitrary things, it may not retry forever, and it
-   may not claim to remember things it never stored.
+1. **Location-independent.** `D:\Alan` and `C:\tools\Alan` must behave
+   identically. Nothing may depend on a hard-coded path, on `PATH`, or on
+   something being installed on the host.
+2. **Bounded.** A personal assistant runs unattended. It may not be able to do
+   arbitrary things, it may not retry forever, and it may not claim to remember
+   things it never stored.
+
+> *History:* the first draft of property 1 was written for a USB-stick
+> distribution that has since been dropped. Alan is developed and run as a
+> normal program on this machine; the property survives because
+> location-independence is what makes the paths testable.
 
 ## Shape
 
@@ -420,7 +427,7 @@ command" rather than to a wrong one.
 
 Only languages with a recognisable runner get one, and Python deliberately runs
 through *this* interpreter (`python -m pytest -q`, not a bare `pytest`) so a
-portable install on removable media uses the Python it shipped with.
+fresh copy of the folder uses the Python it shipped with.
 
 The inferred command is only as good as the repository's own test configuration,
 so Alan ships one: `pytest.ini` pins `testpaths = tests` and excludes `env`.
@@ -638,15 +645,16 @@ pipeline; `stream()` calls the routed model directly for latency and then
 applies the orchestrator's memory gate. It used to remember every turn
 unconditionally -- that is precisely what the gate exists to prevent.
 
-## Portability mechanics
+## Location independence
 
 - `ALAN_HOME` is derived from `config.py`'s own path
-  (`<home>/src/alan/config.py` -> `<home>`), so a changing drive letter is
-  irrelevant. A test asserts no drive letter is hard-coded anywhere.
+  (`<home>/src/alan/config.py` -> `<home>`), so moving or renaming the folder
+  is irrelevant. A test asserts no absolute path is hard-coded anywhere.
 - The embeddable Python build uses `python312._pth`; `..\..\src` is listed
   there so `import alan` works without `PYTHONPATH`, which isolated mode
   ignores.
-- `OLLAMA_MODELS` points at `<home>/models`, keeping model blobs on the stick.
+- `OLLAMA_MODELS` points at `<home>/models`, keeping model blobs inside the
+  folder.
 - Bundled Ollama binds `127.0.0.1:11435` so it never collides with a host
   Ollama on `11434`.
 - The cognee sidecar runs on `127.0.0.1:8012` from a **second** embeddable
@@ -674,9 +682,10 @@ copied into `<python>\DLLs`.
 
 ## Why embeddable Python?
 
-The drive is exFAT: no permissions, no symlinks. A normal `venv` and many
-installers assume both. The official *embeddable* CPython zip is
-self-contained, needs no installer, and sidesteps permission issues. Its main
+The install touches nothing outside its own folder: no installer, no host
+Python, no registry. A normal `venv` needs an interpreter already present and
+writes outside the project; the official *embeddable* CPython zip is
+self-contained and sidesteps both. Its main
 quirk -- isolated mode, ignoring `PYTHONPATH` -- is handled via `._pth`.
 
 ## Where the design came from

@@ -58,8 +58,8 @@ _LANGUAGE_BY_SUFFIX = {
 
 #: Language -> (argv, human-readable label). The argv comes first because that
 #: is what is executed; the label is only ever shown. Python deliberately runs
-#: through *this* interpreter rather than a bare ``pytest``, so a portable
-#: install on removable media uses the Python it was shipped with.
+#: through *this* interpreter rather than a bare ``pytest``, so a fresh copy
+#: of the folder uses the interpreter it was shipped with.
 _TEST_RUNNERS = {
     "python": ([sys.executable, "-m", "pytest", "-q"], "python -m pytest -q"),
     "typescript": (["npm", "test"], "npm test"),

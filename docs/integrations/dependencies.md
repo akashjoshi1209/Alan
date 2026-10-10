@@ -295,7 +295,7 @@ that was perfectly healthy.
 
 | Component | Version | Notes |
 |---|---|---|
-| CPython (embeddable) | 3.12.10 | Windows, `python312._pth` isolated mode, exFAT-safe |
+| CPython (embeddable) | 3.12.10 | Windows, `python312._pth` isolated mode, no installer |
 | cognee sidecar | 1.6.2 | separate env `env\cognee\python`, torch 2.14.1+cpu, port 8012 |
 | cognee model cache | — | ~811 MB under `data\cognee\cache` (GLiNER + fastembed `BAAI/bge-small-en-v1.5`) |
 | browser sidecar | browser-use 0.13.10 | separate env `env\browser\python`, port 8022, drives host Chrome/Edge over CDP |
@@ -315,11 +315,11 @@ Alan.
 | `11435` | Alan's bundled Ollama (`OLLAMA_HOST=127.0.0.1:11435`) |
 | `11434` | *not* Alan's — a host Ollama default that must not be touched |
 
-## Portability constraints this manifest must respect
+## Constraints this manifest must respect
 
 1. **Python only.** No Node/Bun/Rust runtime is shipped.
 2. **One folder.** Every path resolves from `ALAN_HOME`; no host installs.
-3. **exFAT.** No symlinks, no POSIX permissions, single-file clusters are 128 KB
-   — new dependencies are kept small and few.
+3. **Small and few.** The folder moves and copies as a unit, so new
+   dependencies are kept small and few.
 4. **Lean main env.** Heavy or conflicting stacks become isolated sidecars.
 5. **Keyless by default.** No integration may require a cloud key to function.

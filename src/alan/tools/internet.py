@@ -6,7 +6,7 @@ a real browser, clicking, screenshotting. Reading a page and searching the web
 do not need that machinery, and an assistant whose only web path is a sidecar
 that has to be started first has effectively no web.
 
-These two backends are zero-config on a stick install:
+These two backends are zero-config:
 
 * **Exa** — ``mcporter call exa.web_search_exa ...`` A hosted semantic search;
   no key, no browser, no scraping.

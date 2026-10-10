@@ -8,8 +8,8 @@ adds the second, reachable surface: Telegram.
 It is a *long-poll* bridge, and deliberately not a webhook:
 
 * ``getUpdates`` reaches out of Alan on a schedule; Telegram never dials back
-  in. No webhook endpoint, no open port, no server to expose -- the stick
-  keeps its offline-first posture.
+  in. No webhook endpoint, no open port, no server to expose -- Alan keeps its
+  offline-first posture.
 * The only input that matters is a decision. ``/approve <id>`` and
   ``/reject <id>`` from the configured chat become the same calls the chat
   loop's ``/approve`` and ``/reject`` make, with the same id-suffix matching

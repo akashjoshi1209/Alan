@@ -41,7 +41,7 @@ for _stream in (sys.stdout, sys.stderr):
         pass
 del _stream
 
-app = typer.Typer(add_completion=False, help="Alan - a portable, self-contained AI assistant.")
+app = typer.Typer(add_completion=False, help="Alan - a local-first personal assistant.")
 console = Console()
 
 #: Rich's renderers, imported on first use rather than at module scope.

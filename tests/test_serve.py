@@ -1,8 +1,8 @@
 """Phase 5: the headless always-on surface (`alan serve`).
 
-Dots / Grok Bot / Muse all keep working while no app is open. On a USB stick
-the honest copy of that is: keep working while *the terminal is closed*. `alan
-serve` runs the scheduler and (when configured) the Telegram approval bridge
+Dots / Grok Bot / Muse all keep working while no app is open. The honest copy
+of that is: keep working while *the terminal is closed*. `alan serve`
+runs the scheduler and (when configured) the Telegram approval bridge
 with no chat surface, stopping on Ctrl+C.
 
 What is pinned here:

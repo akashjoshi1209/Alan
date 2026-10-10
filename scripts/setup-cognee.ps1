@@ -1,6 +1,6 @@
 # Alan - build the Cognee memory sidecar environment
 # ---------------------------------------------------------------------------
-# Creates env\cognee\python (an isolated copy of Alan's portable Python) and
+# Creates env\cognee\python (an isolated copy of Alan's bundled Python) and
 # installs the cognee[gliner] stack into it, with CPU-only PyTorch so Windows
 # does not pull the ~2.4 GB CUDA build. Idempotent: safe to re-run.
 #
@@ -13,7 +13,7 @@ $dstPy = Join-Path $root 'env\cognee\python'
 $py    = Join-Path $dstPy 'python.exe'
 
 if (-not (Test-Path (Join-Path $srcPy 'python.exe'))) {
-    Write-Error "Base portable Python not found at $srcPy."
+    Write-Error "Base Python not found at $srcPy."
     exit 1
 }
 

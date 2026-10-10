@@ -3,7 +3,7 @@
 # Runs cognee's REST API in keyless local mode (GLiNER extraction + fastembed
 # embeddings, no cloud LLM) as a background process, with all stores and model
 # caches kept inside the Alan folder. Everything is derived from this script's
-# own location, so it works from any drive (D:, the USB, etc.).
+# own location, so it works wherever the Alan folder lives.
 #
 # Usage:
 #   scripts\cognee-serve.ps1          -> start (no-op if already running)
@@ -105,7 +105,7 @@ $env:FASTEMBED_CACHE_PATH          = (Join-Path $cogneeRoot 'cache\fastembed')
 $env:TIKTOKEN_CACHE_DIR            = (Join-Path $cogneeRoot 'cache\tiktoken')
 $env:COGNEE_LOGS_DIR               = $logDir
 
-# Keep Python bytecode caches off the (slow, exFAT) USB: compile .pyc into the
+# Keep Python bytecode caches out of the source tree: compile .pyc into the
 # host temp dir instead of writing thousands of small files next to the sources.
 $env:PYTHONPYCACHEPREFIX           = (Join-Path $env:TEMP 'alan-cognee-pyc')
 

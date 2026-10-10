@@ -126,7 +126,7 @@ New-Item -ItemType Directory -Force -Path $logDir | Out-Null
 # which is exactly what a developer testing from source will have done.
 $env:PYTHONPATH          = ''
 
-# Keep bytecode caches off the (slow, exFAT) stick: compile into host temp.
+# Keep bytecode caches out of the source tree: compile into host temp.
 $env:PYTHONPYCACHEPREFIX = (Join-Path $env:TEMP 'alan-browser-pyc')
 
 # Loopback only. The sidecar drives a real browser and can reach authenticated

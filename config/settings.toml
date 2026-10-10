@@ -97,8 +97,8 @@ keep_alive = "30m"
 #     json   -> the dependency-free local store
 #     none   -> no memory at all
 #
-# The fallback is not a nicety: on a portable drive the sidecar being down is a
-# normal state, not an exception, and Alan must keep working.
+# The fallback is not a nicety: the sidecar being down is a normal state, not
+# an exception, and Alan must keep working.
 enabled = true
 backend = "auto"
 base_url = "http://127.0.0.1:8012"
@@ -232,7 +232,7 @@ task_timeout = 600.0
 # Approvals on your phone (Phase 4). A scheduled task that stops at the
 # permission gate waits for a human; this bridge makes that human reachable.
 # It long-polls the Telegram Bot API -- Alan dials OUT, Telegram never calls
-# back in, so nothing on this network opens a port and the stick stays
+# back in, so nothing on this network opens a port and Alan stays
 # offline-first.
 #
 #   bot_token  from @BotFather. LEAVE EMPTY to disable the bridge entirely.

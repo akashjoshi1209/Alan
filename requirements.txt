@@ -53,6 +53,6 @@ rich==15.0.0
 mem0ai==2.2.1
 
 # -- optional: running OTHER projects' test suites ---------------------------
-# Alan's own 128 tests use stdlib unittest. pytest exists solely so code.test
+# Alan's own 668 tests use stdlib unittest. pytest exists solely so code.test
 # can run a repository's suite during a coding task.
 pytest==9.1.1

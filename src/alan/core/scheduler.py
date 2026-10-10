@@ -23,8 +23,8 @@ shaped every decision here:
   decides. Approving re-queues the task immediately; rejecting pauses it so it
   cannot nag or loop.
 * **State survives a crash.** Every mutation is written with
-  :func:`~alan.core.atomic.write_atomic` before the next one, so pulling the
-  USB out mid-run loses at most the transition in flight, not the schedule.
+  :func:`~alan.core.atomic.write_atomic` before the next one, so a crash
+  mid-run loses at most the transition in flight, not the schedule.
 
 Not built (deliberate, recorded in the worklog): *goal* tasks. "Run until X"
 needs a completion predicate the request alone cannot supply; a recurring task

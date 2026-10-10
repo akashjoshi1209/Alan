@@ -4,6 +4,12 @@ Each entry records a decision, the alternatives that were rejected, and what
 would make us revisit it. Context for the source evidence is in
 [../integrations/repository-audit.md](../integrations/repository-audit.md).
 
+> **Terminology:** these entries were written while Alan was still aimed at a
+> USB-stick distribution, and some say "the stick" where they mean *the
+> install*. That idea was dropped on 2026-10-10 — Alan is a personal assistant
+> developed and run on this machine (see ADR-007's status). The decisions
+> themselves still stand; read "the stick" as "Alan".
+
 ---
 
 ## ADR-001 — Port DeepSeek Harness's architecture into Python; do not ship Node
@@ -235,7 +241,13 @@ In exchange there is exactly one place to audit for privilege escalation.
 
 ## ADR-007 — Develop on `D:`, distribute to the USB last
 
-**Status:** accepted · **Date:** 2026-10-04
+**Status:** superseded (2026-10-10) · **Date:** 2026-10-04
+
+*The USB distribution idea was dropped: Alan is developed and run on this
+machine, and no copy to removable media happens. What survives from this
+decision is the working rule it established — develop, test and demo in
+`D:\Alan` — and that rule is still followed. The exFAT context below is kept
+as history.*
 
 ### Context
 The USB volume is exFAT with **128 KB clusters**, so every small file consumes
@@ -532,10 +544,8 @@ survived the "what do they have that Alan does not" filter:
   updated, Muse nudges you. Phase 4 left Alan announcing only approvals on the
   phone.
 * They keep working while no app is open. Alan's loop only ran while an
-  `alan chat` session was open (ADR-008). A USB stick cannot run when the
-  laptop sleeps, but it *can* run with the terminal closed — and insisting on
-  chat-only meant "always-on" still quietly meant
-  "always-on-if-you-are-sitting-here".
+  `alan chat` session was open (ADR-008) — and insisting on chat-only meant
+  "always-on" still quietly meant "always-on-if-you-are-sitting-here".
 
 ### Decision
 Two bounded additions:

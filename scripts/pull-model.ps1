@@ -1,4 +1,4 @@
-# Pull (download) a local model into the USB's models folder via the bundled Ollama.
+# Pull (download) a local model into Alan's models folder via the bundled Ollama.
 # Usage:  scripts\pull-model.ps1                 -> pulls qwen2.5:1.5b (default)
 #         scripts\pull-model.ps1 qwen2.5:3b       -> pulls a different model
 param([string]$Model = 'qwen2.5:1.5b')

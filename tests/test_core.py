@@ -139,7 +139,7 @@ class TestConfiguration(unittest.TestCase):
     def test_settings_sections_have_safe_defaults(self) -> None:
         settings = Settings()
         self.assertEqual(settings.provider, "auto")
-        # A portable product must not open up privileged actions by default.
+        # A personal assistant must not open up privileged actions by default.
         self.assertEqual(settings.permissions.ceiling, "medium_risk")
         self.assertFalse(settings.tools.execution)
         self.assertFalse(settings.tools.browser)
