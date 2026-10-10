@@ -13,7 +13,11 @@ import unittest
 from pathlib import Path
 
 from alan.config import Settings
-from alan.core.orchestrator import _CAPABILITY_HANDLERS, _allowed_for
+from alan.core.orchestrator import (
+    _CAPABILITY_HANDLERS,
+    _SOFT_STEPS,
+    _allowed_for,
+)
 from alan.core.planner import HeuristicPlanner
 from alan.runtime import build_runtime
 
@@ -61,11 +65,46 @@ class PlannerIntentTests(unittest.TestCase):
 
 
 class CapabilityMapTests(unittest.TestCase):
-    def test_actions_map_to_knowledge_tools(self) -> None:
+    def test_search_and_ingest_map_to_their_tools(self) -> None:
         self.assertEqual(_CAPABILITY_HANDLERS["kb_search"], "knowledge.search")
         self.assertEqual(_CAPABILITY_HANDLERS["kb_ingest"], "knowledge.ingest")
-        self.assertEqual(_CAPABILITY_HANDLERS["kb_list"], "knowledge.list")
-        self.assertEqual(_CAPABILITY_HANDLERS["kb_forget"], "knowledge.forget")
+
+    def test_no_plan_can_reach_a_destructive_or_browsing_knowledge_tool(self) -> None:
+        """`knowledge.forget` is CLI-only, and it takes two layers to say so.
+
+        `_allowed_for` builds the *informational* catalogue in the system
+        prompt, not an execution gate -- `_execute_step` reads the tool
+        straight from `_CAPABILITY_HANDLERS`. So the mapping is the only
+        thing between a future planner rule and an erased corpus, and it is
+        the layer this pins. Reaching these tools must stay a deliberate act
+        (`alan brain forget`), never a sentence someone happened to type.
+        """
+        self.assertNotIn("kb_list", _CAPABILITY_HANDLERS)
+        self.assertNotIn("kb_forget", _CAPABILITY_HANDLERS)
+
+        planner = HeuristicPlanner()
+        for request in (
+            "forget my notes about pricing",
+            "delete my notes",
+            "remove everything from my second brain",
+            "list my notes",
+            "show my notes",
+        ):
+            plan = planner.plan(request)
+            actions = [step.action for step in plan.steps]
+            with self.subTest(request=request, intent=plan.intent):
+                self.assertNotIn("kb_forget", actions)
+                self.assertNotIn("kb_list", actions)
+                self.assertNotIn("knowledge.forget", _allowed_for(plan))
+
+    def test_unmapped_knowledge_actions_fail_visibly_instead_of_running(self) -> None:
+        """The design contract the removal rests on.
+
+        `_execute_step` reports an action with no mapping rather than no-op'ing
+        it, so a planner rule that did start emitting `kb_forget` stops with an
+        explanation instead of quietly invoking the tool.
+        """
+        self.assertNotIn("kb_forget", _SOFT_STEPS)
 
     def test_allowed_tools_are_scoped_to_the_intent(self) -> None:
         search_plan = HeuristicPlanner().plan("search my notes for x")

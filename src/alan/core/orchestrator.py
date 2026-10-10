@@ -104,14 +104,20 @@ _CAPABILITY_HANDLERS = {
     "fs_list": "filesystem.list",
     "fs_write": "filesystem.write",
     "fs_delete": "filesystem.delete",
-    # The second brain. Mapped like every other capability, so the gate checks
-    # them and `requires_capability` counts them -- a question aimed at the
-    # user's corpus escalates to the full pipeline instead of being answered
-    # conversationally with a promise to go and look.
+    # The second brain. Mapped like every other capability, so `requires_capability`
+    # counts them -- a question aimed at the user's corpus escalates to the full
+    # pipeline instead of being answered conversationally with a promise to go
+    # and look.
+    #
+    # `knowledge.list` and `knowledge.forget` are registered tools but
+    # deliberately have *no* action here: no rule in the planner can emit one,
+    # and `_allowed_for` has no intent naming them. Only `alan brain list` and
+    # `alan brain forget` reach them, so a destructive erase is never one
+    # sentence away. Leaving the pair mapped would have made it one regex rule
+    # away, and the catalogue in `_allowed_for` is informational only -- it is
+    # not an execution gate, so nothing else would have stopped it.
     "kb_search": "knowledge.search",
     "kb_ingest": "knowledge.ingest",
-    "kb_list": "knowledge.list",
-    "kb_forget": "knowledge.forget",
 }
 
 #: Which observations carry the authoritative record of a delegation, in the form
