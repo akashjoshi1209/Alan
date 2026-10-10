@@ -64,8 +64,17 @@ class MemoryProvider(ABC):
         top_k: int = 5,
         levels: Sequence[MemoryLevel] | None = None,
         min_confidence: float = 0.0,
+        session_id: str | None = None,
     ) -> list[MemoryItem]:
-        """Semantic search, best match first."""
+        """Semantic search, best match first.
+
+        ``session_id`` is a *ranking hint*, never a filter. Items recorded
+        during that session are boosted, so "what tool did we just run?" is
+        answered from this conversation; items from other sessions still
+        compete on their own merits, because a durable fact about the user is
+        just as true now as it was last week. Hard-filtering would make
+        persistent memory forget the moment a new chat opened.
+        """
 
     @abstractmethod
     def retrieve(self, item_id: str) -> MemoryItem | None:
@@ -92,6 +101,7 @@ class MemoryProvider(ABC):
         top_k: int = 5,
         max_chars: int = 2000,
         hits: Sequence[MemoryItem] | None = None,
+        session_id: str | None = None,
     ) -> str:
         """Search and render as a prompt block. Empty string when no hits.
 
@@ -113,7 +123,14 @@ class MemoryProvider(ABC):
 
         if hits is None:
             try:
-                hits = self.search(query, top_k=top_k)
+                hits = self.search(query, top_k=top_k, session_id=session_id)
+            except TypeError:
+                # A provider that predates session-aware search. Losing the
+                # ranking hint must never lose the recall itself.
+                try:
+                    hits = self.search(query, top_k=top_k)
+                except Exception:
+                    return ""
             except MemoryUnavailable:
                 return ""
             except Exception:

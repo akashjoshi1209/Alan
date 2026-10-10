@@ -59,7 +59,7 @@ scripts\whisper-serve.ps1 -Stop
 ```
 
 `ALAN_NO_VOICE=1` stops `run.ps1` from auto-starting it, the way
-`ALAN_NO_MEMORY=1` does for cognee.
+`ALAN_NO_MEMORY=1` stops Alan from building any memory backend at all.
 
 ## Models
 

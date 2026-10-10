@@ -31,5 +31,13 @@ if SRC.is_dir() and str(SRC) not in sys.path:
 # lifetimes, not fixtures. The ensure is a product behaviour and is tested on
 # its own with mocks; everywhere else it stays switched off -- the same
 # ALAN_NO_* switches the launcher has always honoured.
-os.environ.setdefault("ALAN_NO_MEMORY", "1")
 os.environ.setdefault("ALAN_NO_OLLAMA", "1")
+
+# Memory is a SQLite file now, so nothing is spawned -- but a test run must not
+# write episodic records into the live store either. Pointing it at a scratch
+# directory keeps every suite run hermetic without disabling memory, which
+# would stop the tests exercising the behaviour they are named after.
+if not os.environ.get("ALAN_MEMORY_DIR"):
+    import tempfile
+
+    os.environ["ALAN_MEMORY_DIR"] = tempfile.mkdtemp(prefix="alan-test-memory-")

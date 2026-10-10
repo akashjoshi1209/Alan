@@ -168,6 +168,7 @@ class MemorySettings:
     #: auto | cognee | mem0 | json | none
     backend: str = "auto"
     base_url: str = "http://127.0.0.1:8012"
+
     dataset: str = "alan"
     top_k: int = 5
     max_context_tokens: int = 512
@@ -180,6 +181,22 @@ class MemorySettings:
     mem0_embedder: str = "BAAI/bge-small-en-v1.5"
     mem0_base_url: str = "http://127.0.0.1:11435"
     mem0_store_path: str = ""
+
+    #: --- the local SQLite store (the default backend) -----------------
+    #: Empty -> ``DATA_DIR/memory/memory.db``. One file, no sidecar.
+    local_db: str = ""
+    #: Add the query-vector reordering signal when the embedding model is up.
+    #: Turning this off costs nothing but the paraphrase recall; the store
+    #: still writes, still searches and still persists.
+    local_embed: bool = True
+    #: Embedding model on the local Ollama. Defaults to the same model the
+    #: knowledge store uses, so Ollama never has to hold two embedding models
+    #: on a machine that only has a few hundred MB to spare.
+    local_embed_model: str = "nomic-embed-text"
+    #: How long one turn may wait for a query embedding before falling back to
+    #: the lexical answer it already has. Bounded on purpose: this runs in
+    #: front of the first token, and a cold model can take tens of seconds.
+    local_vector_budget_ms: int = 150
 
 
 @dataclass

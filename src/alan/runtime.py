@@ -32,7 +32,8 @@ from .interfaces.types import PermissionRequest, RiskLevel, ToolSpec
 from .knowledge import KnowledgeStore, NullEmbedder, build_embedder
 from .llm import _construct, known_providers
 from .llm.base import ProviderError
-from .memory.providers import build_memory_provider
+from .memory.providers import DEFAULT_BACKEND, build_memory_provider
+from .memory.observer import MemoryObserver
 from .models.router import ModelRouter
 from .permissions.gate import PermissionGate, Policy, default_gate
 from .permissions.queue import ApprovalQueue
@@ -62,6 +63,10 @@ class AlanRuntime:
     router: ModelRouter
     orchestrator: Orchestrator
     memory: MemoryProvider | None = None
+    #: Records what tools and agents *do* as session-scoped memory, off the
+    #: same event bus everything else reports through. ``None`` when memory is
+    #: disabled.
+    observer: MemoryObserver | None = None
     execution: LocalExecution | None = None
     coding: LocalCoding | None = None
     browser: BrowserProvider | None = None
@@ -384,8 +389,9 @@ def build_router(settings: Settings) -> tuple[ModelRouter, str]:
 
 
 #: How to bring a memory backend back up. Only sidecars are listed, because only
-#: sidecars have a start command -- mem0 is a package, not a process, so the
-#: honest advice for it is to inspect rather than to run something.
+#: sidecars have a start command -- the default backend is a file on disk and
+#: mem0 is a package, so the honest advice for both is to inspect rather than
+#: to run something.
 _START_COMMAND = {
     "cognee": "scripts\\cognee-serve.ps1",
 }
@@ -462,18 +468,21 @@ def build_runtime(
 
     if memory is None:
         memory, memory_note = build_memory_provider(
-            settings.memory, model=settings.ollama.model
+            settings.memory,
+            model=settings.ollama.model,
+            ollama_base_url=settings.ollama.base_url,
         )
-        # A silent fallback is worse than a slow one: cognee down means semantic
-        # recall quietly becomes keyword lookup, and the user has no way to tell
+        # A silent fallback is worse than a slow one: a backend going missing
+        # means recall quietly changes character and the user has no way to tell
         # from Alan's answers that anything changed. So compare what was asked
         # for against what is actually in use -- structural, not string-matching
         # a message that may be reworded later -- and name the command to fix it.
         requested = (settings.memory.backend or "auto").lower()
-        # In `auto` mode cognee is the first choice, so cognee being the active
-        # backend is success, not a fallback. Getting this wrong would nag a
-        # correctly-configured install to start a sidecar it is already using.
-        expected = "cognee" if requested == "auto" else requested
+        # In `auto` mode the default is the first choice, so the default being
+        # the active backend is success, not a fallback. Getting this wrong
+        # would nag a correctly-configured install to start something it is
+        # already using.
+        expected = DEFAULT_BACKEND if requested == "auto" else requested
         if memory is not None and memory.name != expected:
             remedy = _START_COMMAND.get(expected)
             memory_note += f" - start it with {remedy}" if remedy else (
@@ -620,6 +629,18 @@ def build_runtime(
         agents=standard_agents(coding),
     )
 
+    # What Alan *does* becomes memory, from the same bus everything else
+    # reports through: a tool call, an MCP call, a sub-agent run or a refusal
+    # is recorded as a session-scoped episode so a later session can ask what
+    # happened. It is attached after the registry exists (the observer reads
+    # specs to tell an MCP call from a local one) and after memory is built,
+    # and it is off entirely when memory is off.
+    observer: MemoryObserver | None = None
+    if memory is not None:
+        observer = MemoryObserver(memory, registry=registry if register_tools else None)
+        observer.attach(bus)
+        closeables.append(observer)
+
     # The approval queue decides, the scheduler reacts: approving re-queues the
     # waiting task, rejecting pauses it (see Scheduler.on_approval_decided).
     scheduler: Scheduler | None = None
@@ -648,6 +669,7 @@ def build_runtime(
         router=router,
         orchestrator=orchestrator,
         memory=memory,
+        observer=observer,
         execution=execution,
         coding=coding,
         browser=browser,

@@ -54,33 +54,15 @@ if ((Test-Path $ollamaExe) -and ($env:ALAN_NO_OLLAMA -ne '1')) {
     }
 }
 
-# Start the Cognee memory sidecar for chat/ask (keyless local memory).
-#
-# Detached and never waited on, and completely silent when it is already up:
-# opening a chat window must not queue behind a sidecar's boot or narrate it.
-# Until cognee answers, memory falls back to the local JSON store -- `alan
-# doctor` names which one is in use, so the fallback is visible, never silent.
-#
-# The starting-cognee.flag breadcrumb is the same file alan.sidecars writes,
-# so two launchers -- or two chats opened a second apart -- cannot boot the
-# same sidecar twice and kill each other for RAM.
 $cmd = if ($args.Count -eq 0) { 'chat' } else { [string]$args[0] }
-$cogneePy = Join-Path $root 'env\cognee\python\python.exe'
-if (($cmd -in @('chat', 'ask')) -and ($env:ALAN_NO_MEMORY -ne '1') -and (Test-Path $cogneePy)) {
-    $serve = Join-Path $root 'scripts\cognee-serve.ps1'
-    $flag = Join-Path $root 'data\starting-cognee.flag'
-    $booting = $false
-    if (Test-Path $flag) {
-        $booting = ((Get-Date) - (Get-Item $flag).LastWriteTime).TotalSeconds -lt 300
-    }
-    if ((Test-Path $serve) -and (-not (Test-Port 8012)) -and (-not $booting)) {
-        try {
-            New-Item -ItemType Directory -Force -Path (Split-Path -Parent $flag) | Out-Null
-            New-Item -ItemType File -Force -Path $flag | Out-Null
-            Start-Process -FilePath 'powershell' -ArgumentList '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $serve -WindowStyle Hidden
-        } catch { Write-Warning "Memory sidecar did not start; continuing without memory." }
-    }
-}
+
+# Memory no longer starts a sidecar.
+#
+# The default backend is a SQLite file (alan.memory.providers.LocalMemory), so
+# there is nothing to boot: cognee's 817 MB of models, its 1-2 minute cold
+# boot and its per-turn HTTP round trip are gone from the startup path
+# entirely. `scripts\cognee-serve.ps1` still exists for an install that sets
+# `[memory] backend = "cognee"` on purpose.
 
 # Start the Whisper speech-to-text sidecar for `voice` (local transcription).
 # Unlike cognee this is not silenced: the model loads in seconds, and a first

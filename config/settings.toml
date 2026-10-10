@@ -90,18 +90,35 @@ keep_alive = "30m"
 [memory]
 # Which backend to use, and what to fall back to when it is unreachable.
 #
-#   backend: auto | cognee | mem0 | json | none
-#     auto   -> cognee when the sidecar answers, otherwise the JSON store
+#   backend: auto | local | cognee | mem0 | json | none
+#     auto   -> the local SQLite store, then the JSON store
+#     local  -> data\memory\memory.db (default; no process to start)
 #     cognee -> the local sidecar started by scripts/cognee-serve.ps1
 #     mem0   -> semantic memory over a local vector store (optional dependency)
-#     json   -> the dependency-free local store
+#     json   -> the dependency-free JSON store
 #     none   -> no memory at all
 #
-# The fallback is not a nicety: the sidecar being down is a normal state, not
+# The fallback is not a nicety: a backend going missing is a normal state, not
 # an exception, and Alan must keep working.
 enabled = true
 backend = "auto"
 base_url = "http://127.0.0.1:8012"
+
+# The local SQLite store (the default backend).
+#
+#   local_db             -> path; empty means data\memory\memory.db
+#   local_embed          -> let a local embedding model *reorder* candidates
+#                           when it is up. Recall stays lexical and correct
+#                           when this is false; it only loses paraphrase match.
+#   local_embed_model    -> defaults to the knowledge store's model, so Ollama
+#                           never holds two embedding models at once
+#   local_vector_budget_ms -> hard cap on waiting for a query embedding. This
+#                           runs in front of the first token; a cold model is
+#                           abandoned rather than paid for.
+#local_db = ""
+#local_embed = true
+#local_embed_model = "nomic-embed-text"
+#local_vector_budget_ms = 150
 dataset = "alan"
 top_k = 5
 max_context_tokens = 512

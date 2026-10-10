@@ -40,7 +40,7 @@ Two properties drive every decision below:
                                 |
                     Execution / Coding / Browser providers
                                 |
-             cognee sidecar | json store | mem0 | Ollama
+              sqlite file | json store | cognee sidecar | mem0 | Ollama
 ```
 
 `Orchestrator` implements `AgentRuntime` directly. It is the only thing that
@@ -221,7 +221,7 @@ composition-root edit, not a rewrite.
 |---|---|
 | `AgentRuntime` | `Orchestrator` |
 | `ModelProvider` | OpenAI, Anthropic, Groq, OpenRouter (the last two through `OpenAIProvider`, which takes the provider name rather than a key), Ollama, `UnavailableModel` |
-| `MemoryProvider` | cognee, mem0, `JsonMemory` |
+| `MemoryProvider` | `LocalMemory` (SQLite + FTS5, default), cognee, mem0, `JsonMemory` |
 | `ToolProvider` | `ToolRegistry` over the standard tool set; `SkillTools` and `EccDevTools` add the gated, read-only ECC tools when `[ecc]` is on |
 | `ExecutionProvider` | `LocalExecution` (jailed to `[tools] execution_root`, argv-only, timeouts) |
 | `CodingProvider` | `LocalCoding` (analyse / edit / test / review) — registered when `[tools] coding = true`, but the planner no longer emits these steps |
@@ -317,7 +317,7 @@ The flow is deliberately one-way:
   appending them would repeat words.
 
 `alan doctor` reports it (`voice: ready|configured|off`), and `scripts\run.ps1
-voice` starts the sidecar the way it starts cognee for `chat`. Details, in
+voice` starts the sidecar for that command only. Details, in
 [whisper.md](integrations/whisper.md).
 
 ### Opening applications and websites
@@ -558,8 +558,45 @@ name per write plus a bounded `PermissionError` retry. A shared temp file
 produces a real `WinError 5` race on Windows when several threads persist at
 once; this is why that helper exists.
 
-Backends degrade rather than fail: `cognee -> mem0 -> json`, chosen by
-`build_memory_provider`, with the reason reported by `alan doctor`.
+Backends degrade rather than fail: `local -> json` (and `json` after either,
+if one was configured by name), chosen by `build_memory_provider`, with the
+reason reported by `alan doctor`. cognee and mem0 are opt-in: naming either
+makes it the primary and the local store its safety net.
+
+### The local store (`LocalMemory`)
+
+The default backend is one SQLite file at `data/memory/memory.db`. It exists
+because the cognee sidecar this replaced was measured costing **1.47 s warm
+and 24 s cold per chat turn** -- an HTTP round trip in front of the first
+token -- while returning nothing: its dataset had never been written to, and
+its ranking was non-discriminating enough that the relevance gate above had to
+be layered over it. See ADR-013.
+
+Three layers of retrieval, cheapest first:
+
+1. **FTS5** narrows the store to a few dozen candidates in single-digit
+   milliseconds. No model, no socket, always available.
+2. **`relevance.score`** -- the same scorer the JSON store and the graph
+   adapter use, so the backends cannot drift into disagreeing about what a
+   match is.
+3. **A query vector** reorders those candidates when the embedding model is
+   up. It is fetched on a hard 150 ms budget and abandoned if the model is
+   cold; the lexical answer already in hand is used instead. Vectors only
+   ever *reorder* what the gate already accepted -- a high cosine score never
+   resurrects an item with no lexical overlap.
+
+Writes never block: rows land immediately and a background daemon produces
+embeddings. `session_id` is a **ranking hint, never a filter** -- items from
+the current conversation are boosted so "what tool did we just run?" is
+answered locally, while a durable fact from last week still competes on its
+own merits. Hard-filtering would make persistent memory forget the moment a
+chat closed.
+
+Alongside it, a `MemoryObserver` subscribes to the shared event bus and
+records what Alan *does* -- tool calls with arguments and outcomes, MCP calls,
+sub-agent runs, refusals -- as session-scoped episodes (L2). Durable facts
+(L4) remain the sole product of `orchestrator._memory_decision`; the observer
+is deliberately not a second, laxer path to the same thing.
 
 ### The relevance gate
 
@@ -670,7 +707,8 @@ too, since passing one is the caller saying "learn into this".
 | `tools/coding.py` | `LocalCoding`: analyse / edit / test / review |
 | `ecc/` | ECC catalog (skills, commands, agents) and the gated `skill.*` / advisory `ecc.*` tools |
 | `models/router.py` | Category routing and bounded failover |
-| `memory/providers/` | cognee, mem0, json, and the fallback factory |
+| `memory/providers/` | local (SQLite, default), cognee, mem0, json, and the fallback factory |
+| `memory/observer.py` | Records tool / MCP / agent activity as session-scoped episodes |
 | `agents/standard.py` | The seven subagents |
 | `assistant.py` | Interactive chat only. Delegates everything else |
 | `cli.py` | Typer commands |
@@ -698,7 +736,10 @@ unconditionally -- that is precisely what the gate exists to prevent.
   `EMBEDDING_PROVIDER=fastembed`, kuzu + sqlite + lancedb, all under
   `data\cognee`. Cold start is 3-4 minutes (relational migrations plus GLiNER
   and fastembed loading), so `cognee-serve.ps1` waits up to 600 s for `/health`
-  and distinguishes a crashed process from one still starting.
+  and distinguishes a crashed process from one still starting. **No longer
+  started automatically** -- memory defaults to SQLite (ADR-013) and this
+  environment exists only for an install that sets
+  `[memory] backend = "cognee"` by hand.
 - The browser sidecar runs on `127.0.0.1:8022` from a **third** embeddable
   Python at `env\browser\python`. browser-use pins `openai`, `rich`, `requests`
   and `posthog` with `==`; installing it into `env\python` would downgrade the

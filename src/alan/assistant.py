@@ -91,6 +91,19 @@ class Alan:
         self.memory = runtime.memory
         self._memory_queue: list[MemoryItem] = []
         self._write_lock = threading.Lock()
+        self._sync_observer_session()
+
+    def _sync_observer_session(self) -> None:
+        """Tell the activity observer which session it is recording.
+
+        Cheap enough to call on every turn, and it must be: the observer is
+        built by the runtime, which has no session concept, while the session
+        is owned here and can change under it (``/resume``). Forgetting to
+        re-sync would file this conversation's tool calls under the last one.
+        """
+        observer = getattr(self.runtime, "observer", None)
+        if observer is not None:
+            observer.session_id = self.session_id
 
     # -- convenience accessors -----------------------------------------
     @property
@@ -177,6 +190,7 @@ class Alan:
 
     def ask(self, text: str, remember: bool = True) -> str:
         """Run one turn through the full pipeline."""
+        self._sync_observer_session()
         result = self.runtime.orchestrator.run(
             text, session_id=self.session_id, remember=remember
         )
@@ -205,6 +219,7 @@ class Alan:
         command is never silently answered with small talk.
         """
         orchestrator = self.runtime.orchestrator
+        self._sync_observer_session()
         if orchestrator.requires_capability(text):
             yield self.ask(text, remember=remember)
             return

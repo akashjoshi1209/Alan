@@ -47,7 +47,8 @@ possible later as a non-shipped power tool.
 
 ## ADR-002 — Two memory backends behind one `MemoryProvider`
 
-**Status:** accepted · **Date:** 2026-10-04
+**Status:** superseded in part by ADR-013 (the interface stands; the default
+moved off cognee) · **Date:** 2026-10-04
 
 ### Context
 Alan's existing persistent memory is a **cognee sidecar** (REST on `:8012`,
@@ -594,3 +595,96 @@ command plus its source-guard tests. ADR-008's ownership rule is amended by
 this ADR: the loops are owned by *chat or an explicit `serve`*, nothing else.
 Revisit when a service-style bootstrap is requested; that should be its own
 ADR, not a silent extension of this one.
+
+---
+
+## ADR-013 — memory is a SQLite file; cognee becomes opt-in
+
+**Status:** accepted · **Date:** 2026-10-11 · **Supersedes the default in
+ADR-002**
+
+### Context
+
+Cognee was measured on this machine, not assumed. Per chat turn:
+
+| | cognee | local SQLite |
+|---|---|---|
+| `context_block`, cold | **24.1 s** | 0.018 s |
+| `context_block`, warm | **1.47 s** | 0.000 s |
+| `/health` (a local HTTP call) | 1.12 s | n/a |
+| results returned | **0** | same items |
+
+And it was returning nothing: recall answered `HTTP 404` for every test query,
+the only dataset was `"alan"` with `"updatedAt": null` (never written to), and
+`data/memory/cognee_index.jsonl` held **3 lines**, last written five days
+earlier. The sidecar itself cost **817 MB** of `data/cognee`, a 1–2 minute
+cold boot, and enough RAM on a 3.9 GB box to drive pagefile thrash that slowed
+*everything* — `alan` was measured opening in 15.2 s while cognee was booting
+against 1.75 s at rest.
+
+Its semantic edge had already been discounted by the codebase itself:
+`memory/relevance.py` exists because cognee's top-k for "capital of France"
+and for the user's own name were *the same four items*, so a lexical gate had
+to be layered over it. The graph's ranking was not usable on its own.
+
+The HTTP hop sat directly on the critical path: `assistant.stream()` calls
+`memory.context_block()` before yielding the first token of every message.
+
+### Decision
+
+`LocalMemory` (`memory/providers/local_store.py`) becomes the default backend.
+`[memory] backend = "auto"` resolves to `local`, then `json`. cognee stays
+reachable by name (`backend = "cognee"`) for anyone who wants the graph; it is
+simply no longer paid for on every message, and no longer auto-started by
+`sidecars.ensure_detached()` or `scripts/run.ps1`.
+
+What it is:
+
+* **One SQLite file** — `data/memory/memory.db`, WAL, one row per item with the
+  full `MemoryItem` metadata plus `session_id`, `project`, `kind` and a
+  `metadata` JSON column.
+* **Three retrieval layers, cheapest first.** FTS5 narrows the store in
+  single-digit milliseconds; the *same* `relevance.score` the JSON store and
+  the graph adapter use ranks the survivors; a query vector reorders them when
+  the embedding model is up. The relevance gate stays authoritative — a high
+  cosine score never resurrects an item with no lexical overlap.
+* **Session scoping as a ranking hint, never a filter.** `search(...,
+  session_id=)` boosts items from the current conversation so "what tool did we
+  just run?" is answered locally, while a durable fact from last week still
+  competes on its own merits. Hard-filtering would make persistent memory
+  forget the moment a chat closed.
+* **Writes never block.** Rows are inserted immediately; embeddings are
+  produced by one background daemon worker. The query vector is fetched on a
+  hard **150 ms** budget and abandoned if the model is cold — the lexical
+  answer it already has is used instead.
+* **Degrades, never fails.** Ollama down or the model unpulled means lexical
+  only. The store still writes, still searches, still persists.
+
+And what it observes: a `MemoryObserver` subscribes to the shared `EventBus`
+and records *what Alan does* — tool calls with their arguments and outcomes,
+MCP calls, sub-agent runs, refusals — as **session-scoped episodes** (L2).
+Durable facts (L4) are still gated solely by
+`orchestrator._memory_decision`; a transcript is not a memory, and the observer
+must not be a second, laxer way around that gate. `tool.finished` now carries a
+redacted, 200-character result preview so an episode records what happened, not
+merely that something did.
+
+### Alternatives rejected
+| Alternative | Why rejected |
+|---|---|
+| Tame cognee (background recall, short timeout, cache) | Keeps the sidecar, the 817 MB, the boot and the RAM pressure; fixes the symptom on the critical path only |
+| Flip the default to the existing `JsonMemory` | Instant and free, but lexical-only: it would have dropped paraphrase recall that the embedder already provides locally |
+| Let recall bypass the relevance gate when cosine is high | Exactly the failure the gate was written for — cognee's identical top-k for unrelated questions |
+| Store full transcripts as memory | The regression `tests/test_memory.py::AssistantMemoryTest` exists to prevent; transcripts live in `data/sessions` |
+| Keep cognee as the default and mark this a performance bug | It was returning nothing. There was no behaviour to preserve |
+
+### Consequences
+`alan` opens with memory already working and nothing to boot. Steady-state
+recall is **~60 ms** with vectors and ~3 ms without, against cognee's 1.47 s
+warm / 24 s cold. The test suite got *faster* (86 s against a 200 s baseline
+with cognee loaded). Two new settings (`[memory] local_*`) and one new env var
+(`ALAN_MEMORY_DIR`, which also keeps test runs out of the live store). The
+cost: SQLite is not a graph, so entity relationships are gone from memory —
+`knowledge/` still owns document knowledge, and the gate had already made the
+graph's ranking unusable. cognee's `env/cognee` tree and `data/cognee` remain
+on disk until someone deletes them; they are simply not started.

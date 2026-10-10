@@ -93,9 +93,8 @@ knowing:
 ┌───────────────────────────────────────────────────────────────────────────┐
 │ Alan doctor                                                               │
 │ ✔    models       1 backend(s): groq:qwen/qwen3.8-27b                     │
-│ ✖    memory       json - cognee unavailable (cognee sidecar not           │
-│                   reachable at http://127.0.0.1:8012); start it with      │
-│                   scripts\cognee-serve.ps1                                │
+│ ✔    memory       local - ready (D:\Alan\data\memory\memory.db, vectors   │
+│                   nomic-embed-text via http://127.0.0.1:11435)            │
 │ ✔    internet     internet - internet ready (Exa search + Jina Reader)    │
 │ ✔    voice        ready on http://127.0.0.1:8181/ready (whisper           │
 │                   small.pt, protocol v1); client installed                │
@@ -128,7 +127,7 @@ knowing:
 | `scripts\selftest.ps1` | Run the offline smoke tests |
 | `scripts\pull-model.ps1 <name>` | Download another local model |
 | `scripts\install-command.ps1` | Make `alan` runnable from any prompt |
-| `scripts\cognee-serve.ps1` | Start/stop the memory sidecar |
+| `scripts\cognee-serve.ps1` | Start/stop the optional cognee memory backend (not used by default) |
 | `scripts\browser-serve.ps1` | Start/stop the browser sidecar |
 | `scripts\whisper-serve.ps1` | Start/stop the speech sidecar |
 | `scripts\setup-whisper.ps1` | Build the speech sidecar environment (once) |
@@ -203,26 +202,49 @@ Then set the model name in `config\settings.toml` under `[ollama]`.
 
 ## Memory
 
-Alan remembers across conversations. A small local **cognee** sidecar (started
-automatically for `chat`/`ask`) stores each turn and pulls relevant memories
-back into the system prompt before Alan answers. It runs keyless and offline:
-GLiNER extracts entities and relations, fastembed builds the vectors — no cloud
-LLM is involved, so your memory never leaves the machine.
+Alan remembers across conversations **and within one.** Memory is a single
+local SQLite file — `data\memory\memory.db` — with no sidecar to start and no
+model to load. Facts land in the system prompt before Alan answers, so what it
+knows about you carries from one chat to the next.
 
-- **Automatic** — every turn is remembered in the background after the reply;
-  relevant past memories are recalled before the next one.
+**Two kinds of memory, on purpose:**
+
+| | Level | Scope | Examples |
+|---|---|---|---|
+| **Facts** | L4 | cross-session | your name, preferences, how things are deployed |
+| **Episodes** | L2 | this session | which tools ran, what they returned, which MCP servers answered, what failed and why |
+
+A transcript is not a memory: only facts you said (or asked Alan to remember)
+become things Alan *knows*, decided by one gate. Everything Alan *did* is
+recorded as session-scoped episodes, so a later session can honestly answer
+"what did you do last time?" without a pile of chatter crowding out what
+matters.
+
+- **Automatic** — durable facts are remembered after the reply; tool calls and
+  agent runs are recorded as they happen, off the same event bus everything
+  else reports through.
 - **Manual** — in `chat`: `/remember TEXT`, `/recall QUERY`, `/memory`,
   `/forget`.
 - **CLI** — `scripts\run.ps1 ingest "..."` or `scripts\run.ps1 memory "query"`.
 
-Memory lives in `data\cognee\`. The **first** write ever downloads the
-extractor models (~800 MB) into that folder, so that first write takes minutes.
-Later start-ups are slower than a normal app (~3–4 min while cognee migrates
-and loads), but a warm write is only about **1.4 s** — fine for something that
-happens behind a reply.
+**It is fast, because nothing has to boot.** Recall runs in ~60 ms with
+embeddings and ~3 ms without, against a measured 1.5 s (and 24 s cold) from the
+cognee sidecar this replaced. A background worker writes vectors so a reply is
+never delayed by a model, and a cold model is abandoned after 150 ms in favour
+of the answer already in hand.
 
 Start Alan without memory with `ALAN_NO_MEMORY=1`, or set `enabled = false`
-under `[memory]` in `config\settings.toml`.
+under `[memory]` in `config\settings.toml`. Point memory at another disk with
+`ALAN_MEMORY_DIR`. Turn off the embedding layer with `local_embed = false` —
+recall stays lexical and everything still works.
+
+> **Upgrading?** Anything an older store wrote (cognee's index, the JSON files)
+> is adopted automatically the first time the database is empty.
+
+**Optional graph backend.** `backend = "cognee"` in `config\settings.toml`
+still selects the cognee sidecar, started with `scripts\cognee-serve.ps1`. It
+is no longer started automatically, and on a small machine it is measurably
+slower: see `docs\decisions\architecture-decisions.md` ADR-013 for the numbers.
 
 ---
 
@@ -255,8 +277,8 @@ machine** — no cloud API, no key, nothing to sign up for.
 - **`--transcribe-only`** stops after the transcript (handy for piping);
   `--prompt "getUserById"` biases Whisper's spelling of your names and jargon
   for that turn.
-- **`alan doctor`** reports it, and `run.ps1 voice` starts the sidecar the way
-  it starts cognee for `chat`. The sidecar preloads your model at startup, so
+- **`alan doctor`** reports it, and `run.ps1 voice` starts the sidecar for that
+  command only. The sidecar preloads your model at startup, so
   the first question isn't the one that waits. Details:
   [docs/integrations/whisper.md](docs/integrations/whisper.md).
 
@@ -456,7 +478,7 @@ the one-line clone command. ECC's hooks are deliberately *not* ported. Details:
 │   └─ .env.example
 ├─ env\                     # git-ignored: interpreters + installed packages
 │   ├─ python\              # Python 3.12.10 + pip + Alan's packages
-│   ├─ cognee\python\       # isolated Python for the memory sidecar
+│   ├─ cognee\python\       # isolated Python for the *optional* cognee backend
 │   ├─ browser\python\      # isolated Python for the browser sidecar
 │   ├─ whisper\python\      # isolated Python for the speech sidecar
 │   └─ ollama\              # the model runtime
@@ -472,7 +494,7 @@ the one-line clone command. ECC's hooks are deliberately *not* ported. Details:
 │       ├─ core\            # orchestrator, planner, events, router, atomic writes
 │       ├─ interfaces\      # the seven provider interfaces Alan owns
 │       ├─ llm\             # provider backends (OpenAI/Anthropic/Groq/OpenRouter/Ollama)
-│       ├─ memory\          # cognee_client + providers/{cognee,json,mem0}
+│       ├─ memory\          # providers/{local,cognee,json,mem0} + observer
 │       ├─ models\          # pydantic schemas
 │       ├─ permissions\     # gate, tiers, policy
 │       ├─ agents\          # the seven subagents
@@ -482,7 +504,7 @@ the one-line clone command. ECC's hooks are deliberately *not* ported. Details:
 │                           # install-command.ps1 -> the `alan` command
 ├─ docs\                    # ARCHITECTURE.md, decisions/, integrations/
 ├─ demos\                   # demo_all.py — five runnable scenarios
-├─ data\                    # logs, saved sessions, cognee + browser memory/state
+├─ data\                    # logs, saved sessions, memory + browser state
 └─ tests\                   # unit tests, stdlib unittest only
 ```
 
@@ -555,12 +577,12 @@ scripts\install-command.ps1 -Uninstall  # restore PATH exactly as it was
 | `No usable AI backend was found` | Add a key in `config\.env`, or pull a model |
 | `model ... is not pulled` | `scripts\pull-model.ps1 qwen2.5:1.5b` |
 | Ollama slow to answer first time | Model is loading into RAM; later turns are faster |
-| Memory seems empty / first turn slow | First-ever memory write downloads ~800 MB of extractor models into `data\cognee\cache`. Warm writes are ~1.4 s |
-| `memory sidecar: unreachable` | Start it with `scripts\cognee-serve.ps1` (or run via `run.ps1`). It takes 3–4 minutes to boot, and the script waits for it rather than giving up |
+| Memory seems empty / first turn slow | Memory is a SQLite file — nothing downloads. First run migrates older stores in. A slow first *answer* is the model loading, not memory |
+| `memory sidecar: unreachable` | Only appears if you set `[memory] backend = "cognee"`. The default backend is a file. Start the graph with `scripts\cognee-serve.ps1`, or drop the setting |
 | `browser sidecar: unreachable` / `needs a BrowserProvider` | Start it with `scripts\browser-serve.ps1`. Ready in under a second — it launches no browser until you actually call a tool |
 | `web.search` reports no trustworthy results | The engine blocked this network or its markup moved. Try `engine = "bing"`: Alan refuses to return results that don't match your query |
 | `web.open` denied, `risk=high_risk` | Working as intended. Raise the ceiling in `config\settings.toml` under `[permissions]`, or ask in an interactive session where you can confirm |
-| Answers feel "hallucinated" from memory | Memory is only injected when it genuinely matches your question — zero word overlap means zero score. `alan forget --list` shows what's actually stored; see `docs\integrations\repository-audit.md` §7 for a known cognee defect that leaks across datasets |
+| Answers feel "hallucinated" from memory | Memory is only injected when it genuinely matches your question — zero word overlap means zero score. `alan forget --list` shows what's actually stored; `alan doctor` names the backend in use |
 | Alan gets slower over hours, RAM climbs | An orphaned browser from the sidecar. `scripts\browser-serve.ps1 -Stop` closes it properly; `alan doctor` shows the sidecar state. Confirm with `Get-Process chrome` |
 | `code.test` takes a minute, or "collects 0 tests" | Fixed by `pytest.ini`, which pins `testpaths = tests`. Without it `pytest` walked `env\python` and `env\browser\python`, burned 73 s collecting, and collected none of Alan's own tests |
 | `alan` is not recognised | Open a **new** command prompt — PATH is only read when a window starts. Check with `scripts\install-command.ps1 -Status` |

@@ -315,10 +315,30 @@ class BackendFallbackNoteTest(unittest.TestCase):
         self.assertIn("cognee was unavailable", note)
         self.assertIn("not reachable", note)
 
-    def test_auto_backend_reports_the_unavailable_primary(self) -> None:
-        _provider, note = self._build("auto")
-        self.assertIn("cognee unavailable", note)
+    def test_auto_backend_is_the_local_store(self) -> None:
+        """`auto` resolves to the SQLite store now, so the note must not claim
+        cognee was consulted at all. Getting this wrong tells a user to start a
+        sidecar that `auto` no longer touches."""
+        provider, note = self._build("auto")
+        self.assertEqual(provider.name, "local")
+        self.assertNotIn("cognee", note.lower())
+        self.assertIn("ready", note)
+        provider.close()
+
+    def test_auto_falls_back_to_json_when_the_local_store_is_broken(self) -> None:
+        """The fallback path still has to work, and still has to say why."""
+        with mock.patch(
+            "alan.memory.providers.LocalMemory.available",
+            return_value=(False, "cannot write to /nope: read-only"),
+        ):
+            provider, note = build_memory_provider(MemorySettings(enabled=True))
+        self.assertEqual(provider.name, "json")
+        # `auto` tries local then json in order, so this is the in-order path
+        # rather than the configured-fallback path -- but either way the reason
+        # the default was skipped has to survive into the note.
         self.assertIn("using json", note)
+        self.assertIn("local unavailable", note)
+        self.assertIn("read-only", note)
 
     def test_runtime_names_the_command_to_start_cognee(self) -> None:
         settings = load_settings()

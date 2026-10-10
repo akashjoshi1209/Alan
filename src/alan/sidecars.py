@@ -7,10 +7,15 @@ when a sidecar answers, refused just as fast when it does not), the starts are
 detached processes that own their own readiness, and nothing in this module
 can hold a prompt hostage to a sidecar's boot.
 
-Until a sidecar answers, the layer above falls back -- memory to the local
-JSON store -- and ``alan doctor`` names which one is in use, so the fallback
-is visible rather than silent. ``ALAN_NO_MEMORY=1`` / ``ALAN_NO_OLLAMA=1``
-opt out, the same switches ``scripts\\run.ps1`` has always honoured.
+Only Ollama is started. Memory no longer needs a process at all: the default
+backend is a SQLite file (``alan.memory.providers.LocalMemory``), so the cognee
+sidecar -- 817 MB of models, a 1-2 minute cold boot, and an HTTP round trip on
+the critical path of every message -- is no longer on the startup path.
+``scripts\\cognee-serve.ps1`` remains for anyone who sets
+``[memory] backend = "cognee"`` deliberately.
+
+``ALAN_NO_OLLAMA=1`` opts out of the model server, the same switch
+``scripts\\run.ps1`` has always honoured.
 """
 
 from __future__ import annotations
@@ -25,13 +30,15 @@ from typing import Sequence
 
 from .config import HOME
 
+#: Kept for the doctor and for the opt-in cognee launcher, which still probe
+#: this port when ``[memory] backend = "cognee"`` is configured.
 COGNEE_PORT = 8012
 OLLAMA_PORT = 11435
 
 #: A sidecar that has not answered within this window is assumed dead and is
 #: started again; until then, one boot in flight holds off the next. Five
-#: minutes is far beyond a normal boot (cognee ~1-2 min cold, ollama seconds)
-#: and far below "never": a crashed start still gets retried.
+#: minutes is far beyond a normal boot (ollama is seconds) and far below
+#: "never": a crashed start still gets retried.
 _START_FLAG_SECONDS = 300
 
 
@@ -100,33 +107,18 @@ def _start_detached(args: Sequence[str]) -> None:
 
 
 def ensure_detached(home: Path | None = None) -> None:
-    """Bring up cognee (memory) and Ollama (local models) if they are down.
+    """Bring up Ollama (local models) if it is down.
 
     Fires and forgets on purpose -- see the module docstring. Safe to call on
-    every run and safe to call twice: each sidecar's own script checks its
-    port first, so the worst a race costs is one extra no-op process.
+    every run and safe to call twice: the script checks its own port first, so
+    the worst a race costs is one extra no-op process.
+
+    Memory is deliberately absent from here. It used to be the reason this
+    function existed, and it cost every chat turn a sidecar probe; now that
+    the default memory backend is a file, starting a process for it would be
+    strictly worse than not.
     """
     root = home or HOME
-    if os.environ.get("ALAN_NO_MEMORY") != "1":
-        serve = root / "scripts" / "cognee-serve.ps1"
-        runtime = root / "env" / "cognee" / "python" / "python.exe"
-        if (
-            serve.is_file()
-            and runtime.is_file()
-            and not listening(COGNEE_PORT)
-            and not _started_recently(root, "cognee")
-        ):
-            _mark_starting(root, "cognee")
-            _start_detached(
-                [
-                    "powershell",
-                    "-NoProfile",
-                    "-ExecutionPolicy",
-                    "Bypass",
-                    "-File",
-                    str(serve),
-                ]
-            )
     if os.environ.get("ALAN_NO_OLLAMA") != "1":
         exe = root / "env" / "ollama" / "ollama.exe"
         if (

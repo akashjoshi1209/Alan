@@ -84,29 +84,35 @@ class EnsureDetachedTest(_HomeTest):
         start.assert_not_called()
 
     def test_sidecars_down_start_detached(self) -> None:
+        """Only Ollama is started now.
+
+        cognee used to be launched from here too, and that was the whole
+        problem: an 817 MB model load on the startup path of every chat. Memory
+        is a file, so the only sidecar a chat needs is the model server.
+        """
         self._install_launchers()
         with mock.patch.object(sidecars, "listening", return_value=False), \
                 mock.patch.object(sidecars, "_start_detached") as start:
             sidecars.ensure_detached(self.home)
         started = [" ".join(str(part) for part in call.args[0])
                    for call in start.call_args_list]
-        self.assertEqual(len(started), 2)
-        cognee = next(cmd for cmd in started if "cognee-serve.ps1" in cmd)
-        ollama = next(cmd for cmd in started if "ollama.exe" in cmd)
-        self.assertTrue(cognee.startswith("powershell "), cognee)
-        self.assertIn("cognee-serve.ps1", cognee)
+        self.assertEqual(len(started), 1, started)
+        ollama = started[0]
+        self.assertIn("ollama.exe", ollama)
         self.assertTrue(ollama.endswith(" serve"), ollama)
+        self.assertFalse(any("cognee" in cmd for cmd in started),
+                         "memory no longer needs a sidecar")
 
     def test_the_documented_no_switches_still_honoured(self) -> None:
         self._install_launchers()
-        os.environ["ALAN_NO_MEMORY"] = "1"
-        with mock.patch.object(sidecars, "listening", return_value=False), \
-                mock.patch.object(sidecars, "_start_detached") as start:
-            sidecars.ensure_detached(self.home)
-        started = " ".join(" ".join(str(part) for part in call.args[0])
-                           for call in start.call_args_list)
-        self.assertNotIn("cognee", started)
-        self.assertIn("ollama", started)
+        os.environ["ALAN_NO_OLLAMA"] = "1"
+        try:
+            with mock.patch.object(sidecars, "listening", return_value=False), \
+                    mock.patch.object(sidecars, "_start_detached") as start:
+                sidecars.ensure_detached(self.home)
+            start.assert_not_called()
+        finally:
+            del os.environ["ALAN_NO_OLLAMA"]
 
     def test_a_detached_ollama_inherits_its_models_and_port(self) -> None:
         # The detached process does not see the launcher's environment, so
@@ -127,13 +133,12 @@ class StartBreadcrumbTest(_HomeTest):
     """One boot in flight at a time -- the race that kills a 4GB machine."""
 
     def _booting_sidecar(self) -> None:
-        """A home whose launchers exist and whose cognee is down mid-boot."""
+        """A home whose launchers exist and whose sidecar is down mid-boot."""
         self._install_launchers()
 
     def test_a_fresh_breadcrumb_holds_the_next_start(self) -> None:
         self._booting_sidecar()
-        os.environ["ALAN_NO_OLLAMA"] = "1"  # isolate to cognee
-        sidecars._mark_starting(self.home, "cognee")
+        sidecars._mark_starting(self.home, "ollama")
         with mock.patch.object(sidecars, "listening", return_value=False), \
                 mock.patch.object(sidecars, "_start_detached") as start:
             sidecars.ensure_detached(self.home)
@@ -143,9 +148,8 @@ class StartBreadcrumbTest(_HomeTest):
         # A start that died without ever answering must not block retries
         # forever: past the window, the next chat may try again.
         self._booting_sidecar()
-        os.environ["ALAN_NO_OLLAMA"] = "1"
-        sidecars._mark_starting(self.home, "cognee")
-        flag = sidecars._flag_path(self.home, "cognee")
+        sidecars._mark_starting(self.home, "ollama")
+        flag = sidecars._flag_path(self.home, "ollama")
         stale = time.time() - sidecars._START_FLAG_SECONDS - 1
         os.utime(flag, (stale, stale))
         with mock.patch.object(sidecars, "listening", return_value=False), \
@@ -158,8 +162,20 @@ class StartBreadcrumbTest(_HomeTest):
         with mock.patch.object(sidecars, "listening", return_value=False), \
                 mock.patch.object(sidecars, "_start_detached"):
             sidecars.ensure_detached(self.home)
-        self.assertTrue(sidecars._flag_path(self.home, "cognee").is_file())
         self.assertTrue(sidecars._flag_path(self.home, "ollama").is_file())
+        self.assertFalse(sidecars._flag_path(self.home, "cognee").exists(),
+                         "memory must not leave a start breadcrumb: it starts nothing")
+
+    def test_the_cognee_launcher_existing_starts_nothing(self) -> None:
+        """A cognee install must not be resurrected by its own script being on
+        disk. cognee only runs when a user asks for that backend by name."""
+        self._install_launchers()
+        with mock.patch.object(sidecars, "listening", return_value=False), \
+                mock.patch.object(sidecars, "_start_detached") as start:
+            sidecars.ensure_detached(self.home)
+        started = " ".join(" ".join(str(p) for p in c.args[0])
+                           for c in start.call_args_list)
+        self.assertNotIn("cognee", started)
 
     def test_an_up_sidecar_leaves_no_breadcrumb(self) -> None:
         self._booting_sidecar()

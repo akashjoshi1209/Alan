@@ -94,7 +94,12 @@ browser-use 0.13 is async, so the sidecar runs a private asyncio loop on a
 daemon thread (`_Loop`) in order to keep one browser session alive across
 synchronous HTTP requests.
 
-### `env\cognee\python` — local semantic memory
+### `env\cognee\python` — local semantic memory (**optional since ADR-013**)
+
+Memory defaults to the local SQLite store and starts no process; this
+environment exists only for an install that sets
+`[memory] backend = "cognee"` by hand. See ADR-013 for the measurements that
+moved the default.
 
 | Package | Pin | Notes |
 |---|---|---|
@@ -284,6 +289,15 @@ which is entirely acceptable for a background memory operation and is the reason
 cognee remains the default rather than the JSON fallback. What cognee buys for
 those 1.4 s is semantic recall — the probe recalled items by meaning rather than
 keyword.
+
+> **Superseded by ADR-013 (2026-10-11).** The 1.4 s figure above was measured on
+> `remember`, which happens *after* the reply. The cost that mattered was on
+> `recall`, which happens *before the first token*: `context_block` was **1.47 s
+> warm and 24.1 s cold per chat turn**, `/health` alone was 1.1 s, and the
+> dataset had never actually been written to (`updatedAt: null`; recall answered
+> `HTTP 404` on every probe). cognee is no longer the default and no longer
+> auto-started. The default is now `LocalMemory` — one SQLite file, ~60 ms warm
+> with vectors, ~3 ms without, and it never opens a socket on the hot path.
 
 Cognee's *startup* remains slow (3–4 min: relational migrations plus GLiNER and
 fastembed loading), which is why `scripts\cognee-serve.ps1` waits up to 600 s for

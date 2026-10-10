@@ -23,6 +23,7 @@ from ...core.atomic import write_atomic
 from ...interfaces.memory import MemoryProvider
 from ...interfaces.types import MemoryItem, MemoryLevel, MemoryType
 from ..relevance import score as relevance_score
+from ..relevance import session_bonus
 
 _TOKEN = re.compile(r"[a-z0-9]+")
 
@@ -152,6 +153,7 @@ class JsonMemory(MemoryProvider):
         top_k: int = 5,
         levels: Sequence[MemoryLevel] | None = None,
         min_confidence: float = 0.0,
+        session_id: str | None = None,
     ) -> list[MemoryItem]:
         terms = _terms(query)
         if not terms:
@@ -162,9 +164,11 @@ class JsonMemory(MemoryProvider):
                 if item.is_expired() or item.confidence < min_confidence:
                     continue
                 score = _score(terms, query, item)
-                if score > 0:
-                    item.touched()
-                    scored.append((score, item))
+                if score <= 0:
+                    continue
+                score += session_bonus(session_id, item)
+                item.touched()
+                scored.append((score, item))
         scored.sort(key=lambda pair: pair[0], reverse=True)
         return [item for _score, item in scored[:top_k]]
 

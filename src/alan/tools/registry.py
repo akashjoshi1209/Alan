@@ -149,6 +149,29 @@ class ScopedTools(ToolInvoker):
         self._refuse("unregister a tool")
 
 
+def _preview(output: Any, limit: int = 200) -> str:
+    """A short, redacted description of what a tool returned.
+
+    Carried on the ``tool.finished`` event so the memory observer can record
+    *what happened*, not just that a tool ran. Bounded and coerced to text on
+    purpose: an event field must never hold a megabyte of tool output, and the
+    bus redacts strings but cannot redact an object.
+    """
+    try:
+        if isinstance(output, str):
+            text = output
+        elif isinstance(output, dict):
+            text = ", ".join(f"{k}={v}" for k, v in list(output.items())[:4])
+        else:
+            text = str(output)
+    except Exception:  # noqa: BLE001 - a hostile __str__ must not break a turn
+        text = type(output).__name__
+    text = " ".join(text.split())
+    if len(text) > limit:
+        return text[: limit - 1] + "…"
+    return text
+
+
 class ToolRegistry(ToolInvoker):
     """Holds tool specs and executes them behind the permission gate."""
 
@@ -438,7 +461,8 @@ class ToolRegistry(ToolInvoker):
             self._live.release()
 
         duration = (time.perf_counter() - started) * 1000
-        emit(Events.TOOL_FINISHED, tool=name, duration_ms=duration)
+        emit(Events.TOOL_FINISHED, tool=name, duration_ms=duration,
+             result=_preview(output))
         return ToolResult(ok=True, output=output, tool=name, duration_ms=duration)
 
     # -- prompt rendering ----------------------------------------------

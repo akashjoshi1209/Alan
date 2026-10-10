@@ -220,6 +220,7 @@ class CogneeProvider(MemoryProvider):
         top_k: int = 5,
         levels: Sequence[MemoryLevel] | None = None,
         min_confidence: float = 0.0,
+        session_id: str | None = None,
     ) -> list[MemoryItem]:
         # Ask for extra candidates: tombstones and level filters are applied
         # after retrieval, so requesting exactly top_k can under-fill.
@@ -241,9 +242,9 @@ class CogneeProvider(MemoryProvider):
         # cognee's recall does not discriminate on a small dataset: the same
         # passages came back for unrelated questions. Gating here keeps `search`
         # honest for every caller, not only the ones that build a prompt.
-        from ..relevance import gate
+        from ..relevance import gate, rank_sessions
 
-        return gate(query, hits)[:top_k]
+        return rank_sessions(session_id, gate(query, hits))[:top_k]
 
     def summarize(self, query: str = "", *, top_k: int = 20) -> str:
         items = self.search(query, top_k=top_k) if query else []

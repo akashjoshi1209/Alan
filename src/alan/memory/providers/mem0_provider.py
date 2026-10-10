@@ -184,6 +184,7 @@ class Mem0Provider(MemoryProvider):
         top_k: int = 5,
         levels: Sequence[MemoryLevel] | None = None,
         min_confidence: float = 0.0,
+        session_id: str | None = None,
     ) -> list[MemoryItem]:
         memory = self._build()
         try:
@@ -205,9 +206,9 @@ class Mem0Provider(MemoryProvider):
                 continue
             item.touched()
             hits.append(item)
-            if len(hits) >= top_k:
-                break
-        return hits
+        from ..relevance import rank_sessions
+
+        return rank_sessions(session_id, hits)[:top_k]
 
     def summarize(self, query: str = "", *, top_k: int = 20) -> str:
         hits = self.search(query, top_k=top_k) if query else []

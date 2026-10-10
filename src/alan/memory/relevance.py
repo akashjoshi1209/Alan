@@ -109,4 +109,50 @@ def gate_all(
     return kept
 
 
-__all__ = ["gate", "gate_all", "score", "terms"]
+#: How much a same-session item is preferred. Enough that a tool this
+#: conversation ran outranks an older near-duplicate of the same tool, and
+#: small enough that a durable fact from last week still wins on lexical fit.
+SESSION_BOOST = 0.35
+
+
+def session_bonus(session_id: str | None, item: MemoryItem) -> float:
+    """The score added to an item recorded during ``session_id``.
+
+    Shared so every backend agrees about what "from this session" is worth.
+    A provider that scores numerically (the SQLite store) adds this to its
+    total; one that relies on :func:`gate` for ordering calls
+    :func:`rank_sessions` instead.
+    """
+    if session_id and item.session_id == session_id:
+        return SESSION_BOOST
+    return 0.0
+
+
+def rank_sessions(
+    session_id: str | None, items: Iterable[MemoryItem]
+) -> list[MemoryItem]:
+    """Stable-partition: this session's items first, everything else after.
+
+    For backends whose ordering comes entirely from :func:`gate`, where the
+    per-item scores are not available to blend against. Stable, so items
+    within each group keep the relevance order they already had.
+    """
+    items = list(items)
+    if not session_id:
+        return items
+    own = [i for i in items if i.session_id == session_id]
+    if not own:
+        return items
+    other = [i for i in items if i.session_id != session_id]
+    return own + other
+
+
+__all__ = [
+    "SESSION_BOOST",
+    "gate",
+    "gate_all",
+    "rank_sessions",
+    "score",
+    "session_bonus",
+    "terms",
+]
