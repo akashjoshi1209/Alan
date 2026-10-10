@@ -285,6 +285,41 @@ Three behaviours are worth knowing before debugging it:
   the reaper escalates from `terminate` to `kill` for anything that has not
   actually exited.
 
+### The speech sidecar
+
+`alan voice` is how Alan is asked by ear instead of by keyboard. The
+transcriber is [whisper-flow](https://github.com/dimastatz/whisper-flow), pinned
+in `vendor\whisper-flow` and running on `127.0.0.1:8181` from a **third**
+embeddable Python at `env\whisper\python` — the same isolation rule as cognee
+and browser: heavy, exactly-pinned stacks (torch, PyAudio, openai-whisper) do
+not enter the main environment, and the sidecar's `._pth` has Alan's `src`
+stripped out so it cannot `import alan`.
+
+The flow is deliberately one-way:
+
+- **Alan never touches audio.** `src\whisper_recorder.py` — a standalone
+  script beside `src\alan`, executed by the *sidecar* interpreter because PyAudio
+  belongs there — streams the microphone as 16 kHz mono int16 PCM over the
+  service's `/ws` endpoint and prints the final transcript on stdout. Partials
+  go to stderr so the operator sees their words land while speaking.
+- **The transcript is plain text, and enters the ordinary pipeline.** A spoken
+  request gets the same memory, the same permission gate and the same verified
+  reporting as a typed one. Voice raises no capability: there is no voice-only
+  bypass of anything.
+- **The protocol version is checked, not assumed.** `/ready` reports
+  `protocol_version`; a mismatch refuses to record rather than failing later as
+  silence or garbled text.
+- **Endpointing happens in two places, on purpose.** The client ends the turn
+  after `[voice] silence_ms` of quiet once speech has been seen (and always at
+  `max_seconds`); the server finalises segments on its own pauses and commits
+  agreed word prefixes so a long phrase does not re-transcribe itself. The
+  transcript is assembled from *finals only* — partials replace each other, so
+  appending them would repeat words.
+
+`alan doctor` reports it (`voice: ready|configured|off`), and `scripts\run.ps1
+voice` starts the sidecar the way it starts cognee for `chat`. Details, in
+[whisper.md](integrations/whisper.md).
+
 ### Opening applications and websites
 
 "Open YouTube" means *put it on my screen*. `web.open` means *tell me what this

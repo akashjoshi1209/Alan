@@ -103,6 +103,11 @@ class AlanRuntime:
 
     def status(self) -> dict[str, Any]:
         """A single dict describing the whole system, for ``alan doctor``."""
+        # Imported here rather than at module scope: voice probes the sidecar
+        # over HTTP, which is cheap for a diagnostic and not cheap enough to
+        # run on every command that builds a runtime.
+        from . import voice as voice_module
+
         models = [
             {"provider": p.name, "model": p.model, "local": p.local,
              "available": p.available()[0]}
@@ -134,6 +139,7 @@ class AlanRuntime:
                 else "not registered"
             ),
             "ecc": self.ecc_note or "not registered",
+            "voice": voice_module.describe(self.settings.voice),
             "knowledge": (
                 {"enabled": True, "note": self.knowledge_note, **self.knowledge.stats()}
                 if self.knowledge is not None

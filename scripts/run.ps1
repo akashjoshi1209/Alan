@@ -57,6 +57,17 @@ if (($cmd -in @('chat', 'ask')) -and ($env:ALAN_NO_MEMORY -ne '1') -and (Test-Pa
     }
 }
 
+# Start the Whisper speech-to-text sidecar for `voice` (local transcription).
+# Unlike cognee this is not silenced: the model loads in seconds, and a first
+# run that printed nothing for half a minute would read as a hang.
+$whisperPy = Join-Path $root 'env\whisper\python\python.exe'
+if (($cmd -eq 'voice') -and ($env:ALAN_NO_VOICE -ne '1') -and (Test-Path $whisperPy)) {
+    $serve = Join-Path $root 'scripts\whisper-serve.ps1'
+    if (Test-Path $serve) {
+        try { & $serve } catch { Write-Warning "Voice sidecar did not start; `alan voice` will say so." }
+    }
+}
+
 if ($args.Count -eq 0) {
     & $py -m alan chat
 } else {

@@ -289,6 +289,45 @@ class BrowserSettings:
 
 
 @dataclass
+class VoiceSettings:
+    """Voice input: speak to Alan instead of typing.
+
+    The transcriber is the whisper-flow sidecar, in its own environment and on
+    its own port (8181, clear of cognee's 8012, the browser's 8022 and
+    Ollama's 11435). Alan itself never touches audio: a push-to-talk client
+    under the sidecar interpreter streams the microphone and returns one
+    transcript, which then goes through the ordinary ask pipeline.
+
+    Off in code and on in this install's ``settings.toml`` -- same rule as
+    ECC: a voice channel is something an operator chose, not a property of
+    Alan, so a fresh checkout behaves exactly as before until someone turns it
+    on.
+    """
+
+    #: Master switch: ``alan voice`` refuses to record without it.
+    enabled: bool = False
+    #: Where the sidecar answers. Loopback only -- it drives a microphone.
+    base_url: str = "http://127.0.0.1:8181"
+    #: A model from GET /ready. tiny.en ships inside the package.
+    model: str = "tiny.en.pt"
+    #: Whisper language code; the English-only model ignores it.
+    language: str = "en"
+    #: Vocabulary hint (whisper ``initial_prompt``) -- biases spelling of
+    #: names and jargon. Empty means none.
+    prompt: str = ""
+    #: Set only when the sidecar runs with WF_API_KEY; sent as X-Api-Key.
+    api_key: str = ""
+    #: End of a turn: this much quiet, once speech has been heard.
+    silence_ms: int = 1200
+    #: Hard stop, so a noisy room cannot record until the disk fills.
+    max_seconds: float = 60.0
+    #: Peak PCM amplitude that counts as speech rather than room noise.
+    threshold: int = 500
+    #: Seconds to wait for GET /ready before reporting the sidecar down.
+    timeout: float = 3.0
+
+
+@dataclass
 class VibecoderSettings:
     """How Alan hands coding work to Vibecoder.
 
@@ -384,6 +423,36 @@ class KnowledgeSettings:
 
 
 @dataclass
+class DaemonSettings:
+    """Always-on awareness (Phase 2, roadmap section 4).
+
+    **Off by default, and that is the design.** The daemon is the part of
+    Alan that watches the machine, and principle 1 says autonomy is earned per
+    capability. Nothing is sensed, logged or retained until this is switched
+    on deliberately: section 4.3's "OFF by default" is easiest to honour at
+    the one place it cannot be forgotten.
+
+    Turning the daemon on does **not** turn capture on. This slice owns the
+    loop and the timeline; activity sensing (4.2) and screen understanding
+    (4.3) arrive later behind their own switches, and neither is implemented
+    here.
+    """
+
+    enabled: bool = False
+    #: Empty -> ``DATA_DIR/daemon/alan-daemon.lock``.
+    lock_path: str = ""
+    #: Empty -> ``DATA_DIR/timeline/timeline.db``.
+    store_path: str = ""
+    #: How often the loop ticks. Thirty seconds keeps the kill switch feeling
+    #: instant without waking the disk for nothing.
+    tick_seconds: float = 30.0
+    #: Raw retention, in days. Section 4.3 asks for short raw retention with
+    #: derived summaries kept longer; a digest is a view over the log, so
+    #: pruning rows does not prune what was learned from them.
+    retention_days: float = 14.0
+
+
+@dataclass
 class Settings:
     name: str = "Alan"
     provider: str = "auto"
@@ -417,9 +486,11 @@ class Settings:
     telegram: TelegramSettings = field(default_factory=TelegramSettings)
     tools: ToolSettings = field(default_factory=ToolSettings)
     browser: BrowserSettings = field(default_factory=BrowserSettings)
+    voice: VoiceSettings = field(default_factory=VoiceSettings)
     vibecoder: VibecoderSettings = field(default_factory=VibecoderSettings)
     ecc: EccSettings = field(default_factory=EccSettings)
     knowledge: KnowledgeSettings = field(default_factory=KnowledgeSettings)
+    daemon: DaemonSettings = field(default_factory=DaemonSettings)
 
 
 def _provider_from_table(name: str, table: dict) -> ProviderSettings:
@@ -494,8 +565,8 @@ def _as_bool(value: Any, key: str) -> bool:
 
 def _apply_tables(settings: Settings, raw: dict) -> Settings:
     """Overlay the optional ``[memory]``, ``[permissions]``, ``[scheduler]``,
-    ``[telegram]``, ``[tools]``, ``[browser]``, ``[vibecoder]``, ``[ecc]`` and
-    ``[knowledge]`` tables.
+    ``[telegram]``, ``[tools]``, ``[browser]``, ``[voice]``, ``[vibecoder]``,
+    ``[ecc]``, ``[knowledge]`` and ``[daemon]`` tables.
 
     Every key is optional and every section absent from settings.toml keeps its
     built-in default, so an older config file still loads unchanged.
@@ -604,6 +675,22 @@ def _apply_tables(settings: Settings, raw: dict) -> Settings:
             browser.get("allow_download", b.allow_download), "browser.allow_download"
         )
 
+    voice = raw.get("voice", {})
+    if voice:
+        v = settings.voice
+        v.enabled = _as_bool(voice.get("enabled", v.enabled), "voice.enabled")
+        v.base_url = str(voice.get("base_url", v.base_url))
+        v.model = str(voice.get("model", v.model))
+        v.language = str(voice.get("language", v.language))
+        v.prompt = str(voice.get("prompt", v.prompt))
+        v.api_key = str(voice.get("api_key", v.api_key))
+        # Clamped, like the ECC cap: a silence window of 0 would cut the
+        # operator off mid-word, and one of an hour would never stop.
+        v.silence_ms = max(200, min(int(voice.get("silence_ms", v.silence_ms)), 10000))
+        v.max_seconds = max(5.0, min(float(voice.get("max_seconds", v.max_seconds)), 600.0))
+        v.threshold = max(1, min(int(voice.get("threshold", v.threshold)), 32767))
+        v.timeout = float(voice.get("timeout", v.timeout))
+
     kb = raw.get("knowledge", {})
     if kb:
         k = settings.knowledge
@@ -622,46 +709,6 @@ def _apply_tables(settings: Settings, raw: dict) -> Settings:
         )
         k.max_file_mb = max(0.05, float(kb.get("max_file_mb", k.max_file_mb)))
 
-    return settings
-
-
-def get_api_key(provider: str) -> str | None:
-    env = API_KEY_ENV.get(provider)
-    if not env:
-        return None
-    value = os.environ.get(env, "").strip()
-    return value or None
-@dataclass
-class DaemonSettings:
-    """Always-on awareness (Phase 2, roadmap section 4).
-
-    **Off by default, and that is the design.** The daemon is the part of
-    Alan that watches the machine, and principle 1 says autonomy is earned per
-    capability. Nothing is sensed, logged or retained until this is switched
-    on deliberately: section 4.3's "OFF by default" is easiest to honour at
-    the one place it cannot be forgotten.
-
-    Turning the daemon on does **not** turn capture on. This slice owns the
-    loop and the timeline; activity sensing (4.2) and screen understanding
-    (4.3) arrive later behind their own switches, and neither is implemented
-    here.
-    """
-
-    enabled: bool = False
-    #: Empty -> ``DATA_DIR/daemon/alan-daemon.lock``.
-    lock_path: str = ""
-    #: Empty -> ``DATA_DIR/timeline/timeline.db``.
-    store_path: str = ""
-    #: How often the loop ticks. Thirty seconds keeps the kill switch feeling
-    #: instant without waking the disk for nothing.
-    tick_seconds: float = 30.0
-    #: Raw retention, in days. Section 4.3 asks for short raw retention with
-    #: derived summaries kept longer; a digest is a view over the log, so
-    #: pruning rows does not prune what was learned from them.
-    retention_days: float = 14.0
-
-
-    daemon: DaemonSettings = field(default_factory=DaemonSettings)
     dn = raw.get("daemon", {})
     if dn:
         d = settings.daemon
@@ -675,3 +722,12 @@ class DaemonSettings:
             0.0, min(float(dn.get("retention_days", d.retention_days)), 3650.0)
         )
 
+    return settings
+
+
+def get_api_key(provider: str) -> str | None:
+    env = API_KEY_ENV.get(provider)
+    if not env:
+        return None
+    value = os.environ.get(env, "").strip()
+    return value or None

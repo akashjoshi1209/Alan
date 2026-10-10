@@ -18,7 +18,7 @@
     /_/   \_\|_____|_|\__,_|_| |_|
 ```
 
-**Contents** — [What Alan is](#what-alan-is) · [Why it's different](#why-alan-is-different) · [Quick start](#quick-start) · [Commands](#the-commands) · [Brain](#choosing-a-brain) · [Memory](#memory) · [Failures](#learning-from-failure) · [Always-on](#always-on-scheduling) · [Browsing](#browsing) · [Coding](#coding) · [Skills](#skills-ecc) · [Layout](#layout) · [Anywhere](#location-independence) · [Performance](#performance) · [Troubleshooting](#troubleshooting)
+**Contents** — [What Alan is](#what-alan-is) · [Why it's different](#why-alan-is-different) · [Quick start](#quick-start) · [Commands](#the-commands) · [Brain](#choosing-a-brain) · [Memory](#memory) · [Voice](#voice) · [Failures](#learning-from-failure) · [Always-on](#always-on-scheduling) · [Browsing](#browsing) · [Coding](#coding) · [Skills](#skills-ecc) · [Layout](#layout) · [Anywhere](#location-independence) · [Performance](#performance) · [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -90,6 +90,8 @@ knowing:
 │ models:   2 backend(s): groq:qwen/qwen3.8-27b, ollama:qwen2.5:1.5b          │
 │ internet: internet - internet ready (Exa search + Jina Reader)              │
 │ vibecoder: C:\Users\ADMIN\AppData\Roaming\npm\vibecoder.CMD                 │
+│ voice:    ready - ready on http://127.0.0.1:8181/ready (whisper tiny.en.pt, │
+│ protocol v1); client installed                                              │
 │ tools:    33 registered                                                     │
 │ agents:   orchestrator, browser, coding, memory, planner, research,         │
 │           reviewer, system                                                  │
@@ -118,6 +120,8 @@ start and stop)*
 | `scripts\install-command.ps1` | Make `alan` runnable from any prompt |
 | `scripts\cognee-serve.ps1` | Start/stop the memory sidecar |
 | `scripts\browser-serve.ps1` | Start/stop the browser sidecar |
+| `scripts\whisper-serve.ps1` | Start/stop the speech sidecar |
+| `scripts\setup-whisper.ps1` | Build the speech sidecar environment (once) |
 
 Inside `alan chat`:
 
@@ -204,6 +208,37 @@ happens behind a reply.
 
 Start Alan without memory with `ALAN_NO_MEMORY=1`, or set `enabled = false`
 under `[memory]` in `config\settings.toml`.
+
+---
+
+## Voice
+
+Ask by ear: `scripts\run.ps1 voice`, speak, pause — the answer comes back
+through the same pipeline a typed question uses.
+
+```text
+you> scripts\run.ps1 voice
+speak now - the turn ends when you pause
+  what time is it in tokyo
+you> what time is it in tokyo
+```
+
+The transcriber is [whisper-flow](https://github.com/dimastatz/whisper-flow),
+pinned in `vendor\whisper-flow` and running locally on `127.0.0.1:8181` with
+the bundled Whisper `tiny.en` model. **No audio leaves the machine** — no cloud
+API, no key, nothing to sign up for.
+
+- **Push-to-talk in one breath.** Partials appear as you speak; the turn ends
+  after `[voice] silence_ms` of quiet (default 1.2 s), or at `max_seconds`.
+- **Plain text in, ordinary rules out.** The transcript gets the same memory,
+  the same permission gate and the same verified reporting as typing. Voice
+  grants no capability.
+- **`--transcribe-only`** stops after the transcript (handy for piping);
+  `--prompt "getUserById"` biases Whisper's spelling of your names and jargon
+  for that turn.
+- **`alan doctor`** reports it, and `run.ps1 voice` starts the sidecar the way
+  it starts cognee for `chat`. Details:
+  [docs/integrations/whisper.md](docs/integrations/whisper.md).
 
 ---
 
@@ -403,10 +438,12 @@ the one-line clone command. ECC's hooks are deliberately *not* ported. Details:
 │   ├─ python\              # Python 3.12.10 + pip + Alan's packages
 │   ├─ cognee\python\       # isolated Python for the memory sidecar
 │   ├─ browser\python\      # isolated Python for the browser sidecar
+│   ├─ whisper\python\      # isolated Python for the speech sidecar
 │   └─ ollama\              # the model runtime
 ├─ models\                  # local model files (git-ignored)
 ├─ src\
 │   ├─ browser_sidecar.py   # browser-use sidecar; runs in env\browser only
+│   ├─ whisper_recorder.py  # push-to-talk client; runs in env\whisper only
 │   └─ alan\
 │       ├─ cli.py           # command-line interface
 │       ├─ assistant.py     # conversation state
@@ -520,6 +557,7 @@ scripts\install-command.ps1 -Uninstall  # restore PATH exactly as it was
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | The shape of the system: orchestrator, planner, memory gate, tool registry |
 | [docs/decisions/architecture-decisions.md](docs/decisions/architecture-decisions.md) | Every ADR — the decision, the rejected alternatives, when to revisit |
 | [docs/integrations/ecc.md](docs/integrations/ecc.md) | How the skills catalog is wired and gated |
+| [docs/integrations/whisper.md](docs/integrations/whisper.md) | Voice input: the speech sidecar, its settings and its limits |
 | [docs/integrations/dependencies.md](docs/integrations/dependencies.md) | Pinned manifest, ports, and the constraints it respects |
 | [docs/integrations/repository-audit.md](docs/integrations/repository-audit.md) | The audit of six external projects; nothing was vendored |
 

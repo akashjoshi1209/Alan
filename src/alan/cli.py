@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import json
+import os
+import subprocess
 import sys
 import time
+from pathlib import Path
 from typing import Any, List, Optional
 
 import typer
@@ -419,6 +422,74 @@ def ask(
 ) -> None:
     """Ask Alan a single question and exit."""
     _one_shot(" ".join(text), stream)
+
+
+@app.command()
+def voice(
+    transcribe_only: bool = typer.Option(
+        False, "--transcribe-only", help="Print the transcript and stop; do not ask."
+    ),
+    prompt: Optional[str] = typer.Option(
+        None, "--prompt", help="Vocabulary hint for this turn (spelling of names/jargon)."
+    ),
+    stream: bool = typer.Option(True, "--stream/--no-stream", help="Stream the reply."),
+) -> None:
+    """Talk to Alan: ask by voice, get the answer a typed ask would give.
+
+    Recording is push-to-talk in one breath: speak, then pause. Partials
+    appear as you go, and the turn ends after [voice] silence_ms of quiet.
+    The transcript then goes through the ordinary ask pipeline, so a spoken
+    request gets the same memory, permissions and reporting as a typed one.
+    """
+    from . import voice as voice_mod
+
+    settings = load_settings()
+    if prompt is not None:
+        settings.voice.prompt = prompt
+
+    if not settings.voice.enabled:
+        console.print(
+            # The backslash keeps rich from eating [voice] as a markup tag.
+            "[yellow]voice input is off - set \\[voice] enabled = true "
+            "in config/settings.toml[/yellow]"
+        )
+        raise typer.Exit(code=1)
+
+    ready_ok, note = voice_mod.ready(settings.voice)
+    if not ready_ok:
+        console.print(f"[red]whisper sidecar {note}[/red]")
+        console.print(
+            "[dim]start it with scripts\\whisper-serve.ps1 "
+            "(scripts\\run.ps1 voice starts it for you)[/dim]"
+        )
+        raise typer.Exit(code=1)
+
+    client_ok, client_note = voice_mod.recorder_available()
+    if not client_ok:
+        console.print(f"[red]voice client {client_note}[/red]")
+        raise typer.Exit(code=1)
+
+    console.print("[dim]speak now - the turn ends when you pause[/dim]")
+    try:
+        transcript = voice_mod.listen(settings.voice)
+    except RuntimeError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1)
+
+    if not transcript:
+        console.print(
+            "[yellow]heard nothing - try again, or lower \\[voice] threshold "
+            "if the room is quiet[/yellow]"
+        )
+        raise typer.Exit(code=0)
+
+    console.print(f"[dim]you> {transcript}[/dim]")
+    if transcribe_only:
+        # Plain text on stdout so it can be piped; the dim echo above is for
+        # a human at a terminal.
+        console.print(transcript, markup=False)
+        return
+    _one_shot(transcript, stream)
 
 
 @app.command()
@@ -865,6 +936,7 @@ def doctor() -> None:
             f"internet: {status['internet']['provider'] or 'none'} - {status['internet']['note']}\n"
             f"vibecoder: {status['vibecoder']}\n"
             f"ecc:      {status['ecc']}\n"
+            f"voice:    {status['voice']['state']} - {status['voice']['note']}\n"
             f"telegram: {status['telegram']['chat_id'] or 'none'} - {status['telegram']['note']}\n"
             f"tools:    {len(status['tools'])} registered\n"
             f"agents:   {', '.join(status['agents'])}\n"
@@ -1159,215 +1231,6 @@ def brain(
         runtime.close()
 
 
-def main() -> None:
-    app()
-
-
-@app.command()
-def activity(
-    history: bool = typer.Option(
-        False, "--history", help="Include summaries of recent runs."
-    ),
-) -> None:
-    """Show scheduled tasks, approvals awaiting a decision and recent runs."""
-    runtime = _runtime()
-    try:
-        console.print(runtime.activity_text(include_history=history))
-    finally:
-        runtime.close()
-
-
-@app.command()
-def schedule(
-    action: str = typer.Argument(
-        ...,
-        help="What to do: add, list, show, remove, pause, resume, run, clear-done.",
-    ),
-    text: List[str] = typer.Argument(
-        None, help="task request (add), id or phrase (others)."
-    ),
-    when: str = typer.Option(
-        "",
-        "--when",
-        help="Timing phrase for add: 'every day at 07:30', 'in 2 hours', etc.",
-    ),
-) -> None:
-    """Manage scheduled background tasks (the scheduler itself runs in chat)."""
-    runtime = _runtime()
-    try:
-        if runtime.scheduler is None:
-            console.print("[yellow]scheduler is disabled in config/settings.toml[/yellow]")
-            raise typer.Exit(code=1)
-        sched = runtime.scheduler
-        arguments = " ".join(text or []).strip()
-
-        if action == "list":
-            console.print("\n".join(sched.activity_lines()))
-        elif action == "add":
-            if not arguments:
-                console.print("[yellow]usage: alan schedule add \"TASK\" --when \"...\"[/yellow]")
-                raise typer.Exit(code=1)
-            try:
-                spec = parse_when(when)
-            except ValueError as exc:
-                console.print(f"[red]{exc}[/red]")
-                raise typer.Exit(code=1)
-            task = sched.add(
-                arguments,
-                kind=spec.kind,
-                every_seconds=spec.every_seconds,
-                at_time=spec.at_time if spec.kind == "interval" else "",
-                first_at=spec.first_at,
-                created_by="cli",
-            )
-            console.print(
-                f"[green]scheduled {task.id}[/green] {arguments!r} -- "
-                f"{spec.describe()}, next run {task.next_run_at}"
-            )
-        elif action == "show":
-            if not arguments:
-                console.print("[yellow]usage: alan schedule show <id>[/yellow]")
-                raise typer.Exit(code=1)
-            task = sched.store.get(arguments)
-            if task is None:
-                console.print(f"[red]no task {arguments!r}[/red]")
-                raise typer.Exit(code=1)
-            console.print(Panel(_task_detail(task), title=task.id, border_style="dim"))
-        elif action == "remove":
-            if not arguments:
-                console.print("[yellow]usage: alan schedule remove <id-or-phrase>[/yellow]")
-                raise typer.Exit(code=1)
-            result = runtime.registry.invoke("schedule.remove", {"match": arguments})
-            console.print(result.output if result.ok else f"[red]{result.error}[/red]")
-        elif action in ("pause", "resume", "run"):
-            if not arguments:
-                console.print(f"[yellow]usage: alan schedule {action} <id>[/yellow]")
-                raise typer.Exit(code=1)
-            method = {
-                "pause": sched.pause,
-                "resume": sched.resume,
-                "run": sched.run_now,
-            }[action]
-            task = method(arguments)
-            if task is None:
-                console.print(f"[red]no task {arguments!r}[/red]")
-            else:
-                console.print(
-                    f"[green]{action} {task.id}[/green] status={task.status} "
-                    f"next={task.next_run_at}"
-                )
-        elif action == "clear-done":
-            removed = [
-                t.id
-                for t in sched.store.list()
-                if t.status == "done" and sched.remove(t.id)
-            ]
-            console.print(f"[dim]removed {len(removed)} finished task(s)[/dim]")
-        else:
-            console.print(
-                "[red]unknown action[/red]. Actions: add, list, show, remove, "
-                "pause, resume, run, clear-done. (The scheduler loop itself "
-                "runs in `alan chat`.)"
-            )
-            raise typer.Exit(code=1)
-    finally:
-        runtime.close()
-
-
-def _start_always_on(alan: Alan) -> tuple[bool, bool]:
-    """Start the scheduler and the phone bridge; report which are now on.
-
-    Kept separate from the blocking loop so tests can assert the start/stop
-    contract without owning a terminal.
-    """
-    return alan.start_scheduler(), alan.start_telegram()
-
-
-@app.command()
-def serve(
-    seconds: float = typer.Option(
-        0, "--seconds", help="Exit after this many seconds (default: until Ctrl+C)."
-    ),
-) -> None:
-    """Headless always-on: run the scheduler and (if configured) the Telegram
-    approval bridge with no chat surface.
-
-    This is the keep-working-while-the-terminal-is-closed mode. It is explicit,
-    never implied: background loops still launch only from `alan chat` or this
-    command. Approval safety is unchanged -- a task stopped at the permission
-    gate waits in the queue until somebody decides from the phone bridge
-    (ADR-011), chat, or /activity. Nothing proceeds unasked, and nothing runs
-    unless you asked for this command.
-    """
-    alan = None
-    try:
-        alan = Alan()
-    except ProviderError as exc:
-        console.print(f"[red]{exc}[/red]")
-        raise typer.Exit(code=1)
-
-    scheduler_on, telegram_on = _start_always_on(alan)
-    if not scheduler_on and not telegram_on:
-        console.print(
-            "[yellow]nothing to serve[/yellow] -- enable [scheduler] and/or "
-            "add a [telegram] token + chat_id in config/settings.toml"
-        )
-        alan.close()
-        raise typer.Exit(code=1)
-
-    on = ", ".join(
-        name
-        for name, is_on in (("scheduler", scheduler_on), ("telegram bridge", telegram_on))
-        if is_on
-    )
-    console.print(f"[green]alan serving[/green] ({on}) -- Ctrl+C to stop")
-    try:
-        if seconds > 0:
-            # Sleep in capped chunks so a long `--seconds` still notices
-            # Ctrl+C promptly. One uneapped sleep of e.g. 7200s would make
-            # Ctrl+C wait up to an hour; capping restores responsiveness.
-            remaining = float(seconds)
-            while remaining > 0:
-                time.sleep(min(remaining, 3600.0))
-                remaining -= 3600.0
-        else:
-            while True:
-                time.sleep(0.5)
-    except KeyboardInterrupt:
-        console.print("\n[dim]stopped[/dim]")
-    finally:
-        alan.stop_scheduler()
-        alan.stop_telegram()
-        alan.close()
-
-
-def _task_detail(task: Any) -> str:
-    """One task, laid out for `alan schedule show`."""
-    lines = [
-        f"request:    {task.request}",
-        f"kind:       {task.kind}"
-        + (f" every {task.every_seconds:g}s" if task.every_seconds else "")
-        + (f" at {task.at_time}" if task.at_time else ""),
-        f"status:     {task.status}",
-        f"runs:       {task.run_count}",
-        f"next run:   {task.next_run_at}",
-        f"created:    {task.created_at} by {task.created_by}",
-    ]
-    if task.blocked_by:
-        lines.append(f"waiting on: approval {task.blocked_by}")
-    for run in task.runs:
-        mark = "ok" if run.get("ok") else "FAILED"
-        lines.append(
-            f"[{mark}] {run.get('at', '')}  {str(run.get('summary', ''))[:90]}"
-        )
-    return "\n".join(lines)
-
-
-if __name__ == "__main__":
-    main()
-import os
-import subprocess
-from pathlib import Path
 def _stop_daemon(settings) -> None:
     """Write the kill switch for a configured daemon. Opens no database.
 
@@ -1609,3 +1472,209 @@ def timeline(
         store.close()
 
 
+def main() -> None:
+    app()
+
+
+@app.command()
+def activity(
+    history: bool = typer.Option(
+        False, "--history", help="Include summaries of recent runs."
+    ),
+) -> None:
+    """Show scheduled tasks, approvals awaiting a decision and recent runs."""
+    runtime = _runtime()
+    try:
+        console.print(runtime.activity_text(include_history=history))
+    finally:
+        runtime.close()
+
+
+@app.command()
+def schedule(
+    action: str = typer.Argument(
+        ...,
+        help="What to do: add, list, show, remove, pause, resume, run, clear-done.",
+    ),
+    text: List[str] = typer.Argument(
+        None, help="task request (add), id or phrase (others)."
+    ),
+    when: str = typer.Option(
+        "",
+        "--when",
+        help="Timing phrase for add: 'every day at 07:30', 'in 2 hours', etc.",
+    ),
+) -> None:
+    """Manage scheduled background tasks (the scheduler itself runs in chat)."""
+    runtime = _runtime()
+    try:
+        if runtime.scheduler is None:
+            console.print("[yellow]scheduler is disabled in config/settings.toml[/yellow]")
+            raise typer.Exit(code=1)
+        sched = runtime.scheduler
+        arguments = " ".join(text or []).strip()
+
+        if action == "list":
+            console.print("\n".join(sched.activity_lines()))
+        elif action == "add":
+            if not arguments:
+                console.print("[yellow]usage: alan schedule add \"TASK\" --when \"...\"[/yellow]")
+                raise typer.Exit(code=1)
+            try:
+                spec = parse_when(when)
+            except ValueError as exc:
+                console.print(f"[red]{exc}[/red]")
+                raise typer.Exit(code=1)
+            task = sched.add(
+                arguments,
+                kind=spec.kind,
+                every_seconds=spec.every_seconds,
+                at_time=spec.at_time if spec.kind == "interval" else "",
+                first_at=spec.first_at,
+                created_by="cli",
+            )
+            console.print(
+                f"[green]scheduled {task.id}[/green] {arguments!r} -- "
+                f"{spec.describe()}, next run {task.next_run_at}"
+            )
+        elif action == "show":
+            if not arguments:
+                console.print("[yellow]usage: alan schedule show <id>[/yellow]")
+                raise typer.Exit(code=1)
+            task = sched.store.get(arguments)
+            if task is None:
+                console.print(f"[red]no task {arguments!r}[/red]")
+                raise typer.Exit(code=1)
+            console.print(Panel(_task_detail(task), title=task.id, border_style="dim"))
+        elif action == "remove":
+            if not arguments:
+                console.print("[yellow]usage: alan schedule remove <id-or-phrase>[/yellow]")
+                raise typer.Exit(code=1)
+            result = runtime.registry.invoke("schedule.remove", {"match": arguments})
+            console.print(result.output if result.ok else f"[red]{result.error}[/red]")
+        elif action in ("pause", "resume", "run"):
+            if not arguments:
+                console.print(f"[yellow]usage: alan schedule {action} <id>[/yellow]")
+                raise typer.Exit(code=1)
+            method = {
+                "pause": sched.pause,
+                "resume": sched.resume,
+                "run": sched.run_now,
+            }[action]
+            task = method(arguments)
+            if task is None:
+                console.print(f"[red]no task {arguments!r}[/red]")
+            else:
+                console.print(
+                    f"[green]{action} {task.id}[/green] status={task.status} "
+                    f"next={task.next_run_at}"
+                )
+        elif action == "clear-done":
+            removed = [
+                t.id
+                for t in sched.store.list()
+                if t.status == "done" and sched.remove(t.id)
+            ]
+            console.print(f"[dim]removed {len(removed)} finished task(s)[/dim]")
+        else:
+            console.print(
+                "[red]unknown action[/red]. Actions: add, list, show, remove, "
+                "pause, resume, run, clear-done. (The scheduler loop itself "
+                "runs in `alan chat`.)"
+            )
+            raise typer.Exit(code=1)
+    finally:
+        runtime.close()
+
+
+def _start_always_on(alan: Alan) -> tuple[bool, bool]:
+    """Start the scheduler and the phone bridge; report which are now on.
+
+    Kept separate from the blocking loop so tests can assert the start/stop
+    contract without owning a terminal.
+    """
+    return alan.start_scheduler(), alan.start_telegram()
+
+
+@app.command()
+def serve(
+    seconds: float = typer.Option(
+        0, "--seconds", help="Exit after this many seconds (default: until Ctrl+C)."
+    ),
+) -> None:
+    """Headless always-on: run the scheduler and (if configured) the Telegram
+    approval bridge with no chat surface.
+
+    This is the keep-working-while-the-terminal-is-closed mode. It is explicit,
+    never implied: background loops still launch only from `alan chat` or this
+    command. Approval safety is unchanged -- a task stopped at the permission
+    gate waits in the queue until somebody decides from the phone bridge
+    (ADR-011), chat, or /activity. Nothing proceeds unasked, and nothing runs
+    unless you asked for this command.
+    """
+    alan = None
+    try:
+        alan = Alan()
+    except ProviderError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1)
+
+    scheduler_on, telegram_on = _start_always_on(alan)
+    if not scheduler_on and not telegram_on:
+        console.print(
+            "[yellow]nothing to serve[/yellow] -- enable [scheduler] and/or "
+            "add a [telegram] token + chat_id in config/settings.toml"
+        )
+        alan.close()
+        raise typer.Exit(code=1)
+
+    on = ", ".join(
+        name
+        for name, is_on in (("scheduler", scheduler_on), ("telegram bridge", telegram_on))
+        if is_on
+    )
+    console.print(f"[green]alan serving[/green] ({on}) -- Ctrl+C to stop")
+    try:
+        if seconds > 0:
+            # Sleep in capped chunks so a long `--seconds` still notices
+            # Ctrl+C promptly. One uneapped sleep of e.g. 7200s would make
+            # Ctrl+C wait up to an hour; capping restores responsiveness.
+            remaining = float(seconds)
+            while remaining > 0:
+                time.sleep(min(remaining, 3600.0))
+                remaining -= 3600.0
+        else:
+            while True:
+                time.sleep(0.5)
+    except KeyboardInterrupt:
+        console.print("\n[dim]stopped[/dim]")
+    finally:
+        alan.stop_scheduler()
+        alan.stop_telegram()
+        alan.close()
+
+
+def _task_detail(task: Any) -> str:
+    """One task, laid out for `alan schedule show`."""
+    lines = [
+        f"request:    {task.request}",
+        f"kind:       {task.kind}"
+        + (f" every {task.every_seconds:g}s" if task.every_seconds else "")
+        + (f" at {task.at_time}" if task.at_time else ""),
+        f"status:     {task.status}",
+        f"runs:       {task.run_count}",
+        f"next run:   {task.next_run_at}",
+        f"created:    {task.created_at} by {task.created_by}",
+    ]
+    if task.blocked_by:
+        lines.append(f"waiting on: approval {task.blocked_by}")
+    for run in task.runs:
+        mark = "ok" if run.get("ok") else "FAILED"
+        lines.append(
+            f"[{mark}] {run.get('at', '')}  {str(run.get('summary', ''))[:90]}"
+        )
+    return "\n".join(lines)
+
+
+if __name__ == "__main__":
+    main()
