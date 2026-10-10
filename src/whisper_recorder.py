@@ -61,7 +61,7 @@ def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
     parser.add_argument("--url", default="ws://127.0.0.1:8181/ws", help="sidecar websocket endpoint")
     parser.add_argument("--ready", default="", help="sidecar /ready URL (default: derived from --url)")
     parser.add_argument("--model", default="tiny.en.pt", help="model name from GET /ready")
-    parser.add_argument("--language", default="en", help="whisper language code (english-only models ignore it)")
+    parser.add_argument("--language", default="", help="whisper language code (en, hi, ...); empty = auto-detect, which needs a multilingual model")
     parser.add_argument("--prompt", default="", help="vocabulary hint (whisper initial_prompt)")
     parser.add_argument("--api-key", default="", help="WF_API_KEY, when the sidecar sets one")
     parser.add_argument("--silence-ms", type=int, default=1200, help="stop after this much quiet, once speech started")
@@ -146,6 +146,22 @@ def final_texts(messages: Iterable[dict]) -> str:
         if text:
             finals.append(text)
     return " ".join(finals)
+
+
+def start_message(model: str, language: str = "", prompt: str = "") -> dict:
+    """The ``start`` frame: every field optional, and absent means absent.
+
+    The protocol has no empty-string language -- auto-detect is spelled by
+    *omitting* the field, and the server rejects ``""`` outright as an unknown
+    language. So an empty language and an empty vocabulary hint are both
+    dropped rather than sent as empty values.
+    """
+    message: dict[str, Any] = {"type": "start", "model": model}
+    if language:
+        message["language"] = language
+    if prompt:
+        message["prompt"] = prompt
+    return message
 
 
 def check_ready(ready_url_: str, timeout: float = 3.0) -> dict:
@@ -264,12 +280,7 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
     finals: list[dict] = []
     last_partial = ""
     try:
-        ws.send(json.dumps({
-            "type": "start",
-            "model": args.model,
-            "language": args.language,
-            "prompt": args.prompt,
-        }))
+        ws.send(json.dumps(start_message(args.model, args.language, args.prompt)))
 
         # One read per loop: feeding the detector a frame and then reading a
         # *different* frame to send would halve what the detector sees, making

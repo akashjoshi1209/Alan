@@ -108,7 +108,7 @@ class EndpointTest(unittest.TestCase):
         args = recorder.parse_args([])
         settings = VoiceSettings()
         self.assertEqual(args.model, settings.model)
-        self.assertEqual(args.language, settings.language)
+        self.assertEqual(args.language, settings.language)  # both "" = auto-detect
         self.assertEqual(args.silence_ms, settings.silence_ms)
         self.assertEqual(args.threshold, settings.threshold)
 
@@ -155,6 +155,16 @@ class CommandShapeTest(unittest.TestCase):
         command = voice.recorder_command(settings)
         self.assertEqual(command[command.index("--prompt") + 1], "getUserById")
         self.assertEqual(command[command.index("--api-key") + 1], "secret")
+
+    def test_language_is_omitted_when_unset_so_the_client_can_auto_detect(self) -> None:
+        """Auto-detect is the *absence* of the field on the wire: passing
+        ``--language ''`` would make the client send an empty string, which the
+        server rejects as an unknown language."""
+        self.assertNotIn("--language", voice.recorder_command(VoiceSettings()))
+
+    def test_language_is_passed_when_pinned(self) -> None:
+        command = voice.recorder_command(VoiceSettings(language="hi"))
+        self.assertEqual(command[command.index("--language") + 1], "hi")
 
 
 class ListenTest(unittest.TestCase):
@@ -268,6 +278,25 @@ class RecorderLogicTest(unittest.TestCase):
         samples = array.array("h", [0, 10, -3000, 5])
         self.assertEqual(recorder.peak(samples.tobytes()), 3000)
         self.assertEqual(recorder.peak(b""), 0)
+
+    def test_start_frame_omits_language_and_prompt_when_unset(self) -> None:
+        """Auto-detect is spelled by absence: the server rejects ``language:
+        ""`` outright as an unknown language."""
+        self.assertEqual(
+            recorder.start_message("small.pt"),
+            {"type": "start", "model": "small.pt"},
+        )
+
+    def test_start_frame_sends_language_and_prompt_when_given(self) -> None:
+        self.assertEqual(
+            recorder.start_message("small.pt", language="hi", prompt="getUserById"),
+            {"type": "start", "model": "small.pt",
+             "language": "hi", "prompt": "getUserById"},
+        )
+
+    def test_start_frame_never_carries_an_empty_language(self) -> None:
+        self.assertNotIn("language", recorder.start_message("small.pt", language=""))
+        self.assertNotIn("prompt", recorder.start_message("small.pt", prompt=""))
 
     def test_ready_url_is_derived_from_the_websocket_endpoint(self) -> None:
         self.assertEqual(

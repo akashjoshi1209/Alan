@@ -105,11 +105,15 @@ def recorder_command(settings: VoiceSettings) -> list[str]:
         str(RECORDER),
         "--url", ws_url(settings),
         "--model", settings.model,
-        "--language", settings.language,
         "--silence-ms", str(settings.silence_ms),
         "--max-seconds", str(settings.max_seconds),
         "--threshold", str(settings.threshold),
     ]
+    # Only sent when set: the protocol spells auto-detect as the *absence* of
+    # the language field, and "" is rejected as an unknown language. So an
+    # empty setting must not become "--language ''".
+    if settings.language:
+        command += ["--language", settings.language]
     if settings.prompt:
         command += ["--prompt", settings.prompt]
     if settings.api_key:

@@ -3,8 +3,9 @@
 # Runs the pinned whisper-flow FastAPI server (vendor\whisper-flow) in its own
 # environment (env\whisper\python), on 127.0.0.1:8181. Clients stream 16 kHz
 # mono int16 PCM to /ws and get transcripts back; Alan's `voice` command is the
-# push-to-talk client. Nothing leaves the machine: the model is the bundled
-# Whisper tiny.en, loaded locally.
+# push-to-talk client. Nothing leaves the machine: the model is Whisper
+# itself, loaded locally -- the one config\settings.toml names is preloaded
+# at startup, so the first question never waits out a cold load.
 #
 # Ports: 8181 here, cognee 8012, browser 8022, Ollama 11435 -- no overlap.
 #
@@ -34,6 +35,30 @@ function Test-Sidecar {
         Invoke-WebRequest -Uri $ready -UseBasicParsing -TimeoutSec 3 | Out-Null
         return $true
     } catch { return $false }
+}
+
+# [voice] model from config\settings.toml, else the bundled tiny.en.pt -- and
+# tiny.en.pt again if the configured one is not installed, because the server
+# refuses to start with a model file that does not exist.
+function Get-ModelToPreload {
+    $settingsFile = Join-Path $root 'config\settings.toml'
+    $fallback = 'tiny.en.pt'
+    $chosen = $fallback
+    if (Test-Path $settingsFile) {
+        $inVoice = $false
+        foreach ($line in (Get-Content $settingsFile)) {
+            if ($line -match '^\[') {
+                $inVoice = $line -match '^\[voice\]'
+            } elseif ($inVoice -and $line -match '^\s*model\s*=\s*"([^"]+)"') {
+                $chosen = $Matches[1]
+                break
+            }
+        }
+    }
+    if (-not (Test-Path (Join-Path $vendor "whisperflow\models\$chosen"))) {
+        return $fallback
+    }
+    return $chosen
 }
 
 if ($Status) {
@@ -90,13 +115,18 @@ $env:PYTHONUTF8          = '1'
 # Keep bytecode caches out of the source tree: compile .pyc into host temp.
 $env:PYTHONPYCACHEPREFIX = (Join-Path $env:TEMP 'alan-whisper-pyc')
 
-# Local model, local files. The bundled tiny.en.pt ships inside the package;
-# anything Whisper downloads (it should not, for tiny.en) lands under $vendor
-# rather than the host's home directory.
-$env:WF_MODEL            = 'tiny.en.pt'
+# The model to load at startup. The lifespan preloads WF_MODEL, so choosing
+# the one Alan actually asks for means the *sidecar start* pays the cold load
+# (~70 s for small on this box) instead of the operator's first question.
+# Read from config\settings.toml rather than hard-coded, and fall back to the
+# bundled tiny.en.pt when the named model is not on disk (a fresh checkout
+# never pulled one, and a missing file would abort startup).
+$model = Get-ModelToPreload
+$env:WF_MODEL            = $model
 $env:TORCH_HOME         = (Join-Path $logDir 'torch')
 
-Write-Host "Starting whisper sidecar (Whisper tiny.en, port $port) ..." -ForegroundColor Cyan
+# The header line of the start message.
+Write-Host "Starting whisper sidecar (Whisper $model, port $port) ..." -ForegroundColor Cyan
 $proc = Start-Process -FilePath $py -ArgumentList '-m','uvicorn','whisperflow.fast_server:app','--host','127.0.0.1','--port',"$port" `
     -WorkingDirectory $vendor -WindowStyle Hidden -PassThru `
     -RedirectStandardOutput $outLog -RedirectStandardError $errLog

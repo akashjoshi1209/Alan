@@ -215,25 +215,29 @@ timeout = 60.0
 #
 # Audio never reaches a cloud: the transcriber is the whisper-flow sidecar
 # (vendor\whisper-flow, its own environment at env\whisper\python), running
-# the bundled Whisper tiny.en model locally. A push-to-talk client streams the
-# microphone to it and Alan asks the resulting text through the ordinary
-# pipeline -- same memory, same permission gate.
+# Whisper locally. A push-to-talk client streams the microphone to it and
+# Alan asks the resulting text through the ordinary pipeline -- same memory,
+# same permission gate.
 #
 # Setup and lifecycle:
-#   scripts\setup-whisper.ps1     build the sidecar environment (one time)
-#   scripts\whisper-serve.ps1     start / -Stop / -Status
-#   scripts\run.ps1 voice         speak a question, get the answer
+#   scripts\setup-whisper.ps1       build the sidecar environment (one time)
+#   scripts\pull-stt-model.ps1      download an STT model (small is here)
+#   scripts\whisper-serve.ps1       start / -Stop / -Status
+#   scripts\run.ps1 voice           speak a question, get the answer
 #
 # Off in code, on in this install: a voice channel is an operator's choice.
 enabled = true
 base_url = "http://127.0.0.1:8181"
 
-# A model from GET /ready. tiny.en ships inside the package (~72 MB); a
-# larger model is more accurate and slower on CPU.
-model = "tiny.en.pt"
+# A model from GET /ready. tiny.en (72 MB, English-only) ships inside the
+# package; this install uses small (466 MB, 99 languages), pulled by
+# scripts\pull-stt-model.ps1. Bigger is more accurate and slower on CPU.
+model = "small.pt"
 
-# Whisper language code. The English-only model ignores it.
-language = "en"
+# Whisper language code ("en", "hi", ...). Empty = auto-detect, which only a
+# multilingual model can do -- .en models ignore language entirely. Force it
+# here if auto-detect picks the wrong one on short phrases.
+language = ""
 
 # Vocabulary hint (whisper's initial_prompt): biases spelling of names and
 # jargon. Leave empty for none.

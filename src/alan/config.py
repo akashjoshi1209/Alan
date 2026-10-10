@@ -308,10 +308,15 @@ class VoiceSettings:
     enabled: bool = False
     #: Where the sidecar answers. Loopback only -- it drives a microphone.
     base_url: str = "http://127.0.0.1:8181"
-    #: A model from GET /ready. tiny.en ships inside the package.
+    #: A model from GET /ready. tiny.en ships inside the package; drop larger
+    #: ones into vendor\whisper-flow\whisperflow\models (see
+    #: scripts\pull-stt-model.ps1) and name them here.
     model: str = "tiny.en.pt"
-    #: Whisper language code; the English-only model ignores it.
-    language: str = "en"
+    #: Whisper language code (``en``, ``hi``, ...). Empty means auto-detect,
+    #: which only works on a multilingual model -- ``.en`` ones ignore it.
+    #: The wire protocol has no ``""``: auto-detect is the *absence* of the
+    #: field, so an empty value here must reach the client as "send nothing".
+    language: str = ""
     #: Vocabulary hint (whisper ``initial_prompt``) -- biases spelling of
     #: names and jargon. Empty means none.
     prompt: str = ""

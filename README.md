@@ -90,7 +90,7 @@ knowing:
 │ models:   2 backend(s): groq:qwen/qwen3.8-27b, ollama:qwen2.5:1.5b          │
 │ internet: internet - internet ready (Exa search + Jina Reader)              │
 │ vibecoder: C:\Users\ADMIN\AppData\Roaming\npm\vibecoder.CMD                 │
-│ voice:    ready - ready on http://127.0.0.1:8181/ready (whisper tiny.en.pt, │
+│ voice:    ready - ready on http://127.0.0.1:8181/ready (whisper small.pt,   │
 │ protocol v1); client installed                                              │
 │ tools:    33 registered                                                     │
 │ agents:   orchestrator, browser, coding, memory, planner, research,         │
@@ -122,6 +122,7 @@ start and stop)*
 | `scripts\browser-serve.ps1` | Start/stop the browser sidecar |
 | `scripts\whisper-serve.ps1` | Start/stop the speech sidecar |
 | `scripts\setup-whisper.ps1` | Build the speech sidecar environment (once) |
+| `scripts\pull-stt-model.ps1` | Download an STT model for the sidecar (`-List` to see installed) |
 
 Inside `alan chat`:
 
@@ -225,19 +226,24 @@ you> what time is it in tokyo
 
 The transcriber is [whisper-flow](https://github.com/dimastatz/whisper-flow),
 pinned in `vendor\whisper-flow` and running locally on `127.0.0.1:8181` with
-the bundled Whisper `tiny.en` model. **No audio leaves the machine** — no cloud
-API, no key, nothing to sign up for.
+the multilingual Whisper `small` model (461 MB, 99 languages, auto-detected;
+the bundled 72 MB `tiny.en` stays as the fast fallback). **No audio leaves the
+machine** — no cloud API, no key, nothing to sign up for.
 
 - **Push-to-talk in one breath.** Partials appear as you speak; the turn ends
   after `[voice] silence_ms` of quiet (default 1.2 s), or at `max_seconds`.
 - **Plain text in, ordinary rules out.** The transcript gets the same memory,
   the same permission gate and the same verified reporting as typing. Voice
   grants no capability.
+- **Speak any language.** `[voice] language` is empty by default: Whisper
+  detects English, Hindi or anything else per turn. Pin it to `en`/`hi` if a
+  short phrase gets misdetected.
 - **`--transcribe-only`** stops after the transcript (handy for piping);
   `--prompt "getUserById"` biases Whisper's spelling of your names and jargon
   for that turn.
 - **`alan doctor`** reports it, and `run.ps1 voice` starts the sidecar the way
-  it starts cognee for `chat`. Details:
+  it starts cognee for `chat`. The sidecar preloads your model at startup, so
+  the first question isn't the one that waits. Details:
   [docs/integrations/whisper.md](docs/integrations/whisper.md).
 
 ---

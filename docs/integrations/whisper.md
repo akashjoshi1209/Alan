@@ -27,7 +27,13 @@ Ports: **8181** here · cognee 8012 · browser 8022 · Ollama 11435. No overlap.
 ```powershell
 git clone https://github.com/dimastatz/whisper-flow.git vendor\whisper-flow
 scripts\setup-whisper.ps1        # builds env\whisper\python (~10 min, CPU torch)
+scripts\pull-stt-model.ps1       # downloads an STT model ('small' by default)
 ```
+
+`pull-stt-model.ps1` uses Whisper's own downloader (hash-verified) and writes
+into `vendor\whisper-flow\whisperflow\models`, which is git-ignored with the
+rest of `vendor\` — models stay on the machine, never in the repo. `tiny.en`
+is already there (it ships inside the package).
 
 Then turn it on in `config\settings.toml` (`[voice] enabled = true` — off in
 code, on in this install, like ECC).
@@ -55,14 +61,31 @@ scripts\whisper-serve.ps1 -Stop
 `ALAN_NO_VOICE=1` stops `run.ps1` from auto-starting it, the way
 `ALAN_NO_MEMORY=1` does for cognee.
 
+## Models
+
+whisper-flow serves any `*.pt` in `vendor\whisper-flow\whisperflow\models`
+(`GET /ready` lists them); `[voice] model` picks one, and the sidecar preloads
+that one at startup. Both measured on this machine (4 GB RAM, CPU-only):
+
+| Model | On disk | Languages | RAM once loaded | 4 s of speech |
+|---|---|---|---|---|
+| `tiny.en.pt` | 72 MB | English only | ~150 MB | 3.3 s |
+| `small.pt` | 461 MB | 99 (auto-detects) | ~930 MB | 12.8 s |
+
+`small` is what this install uses — noticeably better on names and noise, at
+about 4× the transcription time and a **70 s one-time load when the sidecar
+starts** (this box has 3.9 GB of RAM total; expect ~380 MB left after both are
+loaded). If that is too slow, `scripts\pull-stt-model.ps1 base` is the middle
+ground; `-List` shows what is installed.
+
 ## Settings
 
 | Key | Default | Meaning |
 |---|---|---|
 | `enabled` | `false` in code, `true` here | `alan voice` refuses without it |
 | `base_url` | `http://127.0.0.1:8181` | loopback only |
-| `model` | `tiny.en.pt` | must be in `GET /ready`'s `models` |
-| `language` | `en` | the English-only model ignores it |
+| `model` | `tiny.en.pt` (code) / `small.pt` (here) | must be in `GET /ready`'s `models`; the sidecar preloads this one at startup |
+| `language` | empty | empty = auto-detect (needs a multilingual model); set `en`, `hi`, ... to force |
 | `prompt` | empty | vocabulary hint (Whisper's `initial_prompt`) |
 | `silence_ms` | `1200` | end of a turn, once speech has been heard (clamped 200–10000) |
 | `max_seconds` | `60.0` | hard stop (clamped 5–600) |
@@ -86,12 +109,13 @@ scripts\whisper-serve.ps1 -Stop
 | Symptom | Fix |
 |---|---|
 | `whisper sidecar not reachable` | `scripts\whisper-serve.ps1` — or use `run.ps1 voice`, which starts it |
-| First start is slow | The model loads into RAM; a cold disk takes tens of seconds. `-Status` reports honestly rather than guessing |
+| First start is slow | By design: the sidecar preloads `[voice] model` before it reports ready, so the cold load (~70 s for `small` on this box) happens once per start, not on your first question. `-Status` reports honestly rather than guessing |
 | `voice client ... setup-whisper.ps1` | The sidecar env is missing; run the setup script |
 | `no microphone` | Windows has no default input device, or the app lacks microphone permission |
 | Records but hears nothing | The mic is not picking up the room. Raise/lower `[voice] threshold`, or check the Windows input level for the device |
-| Gibberish or half sentences | `tiny.en` is the small model; set `[voice] model` to a larger one from `GET /ready` after pulling it, or add a `[voice] prompt` with your names and jargon |
-| Wrong language | `tiny.en` is English-only; other languages need a multilingual model |
+| Slow or laggy partials | `small` is ~4× slower than `tiny.en` on this machine (measured: 12.8 s to transcribe 4 s of speech vs 3.3 s). Trade accuracy for speed with `base`, or accept the delay — push-to-talk records first, so it costs wait, not words |
+| Gibberish or half sentences | Pull a larger model (`scripts\pull-stt-model.ps1 medium`), point `[voice] model` at it and restart the sidecar; a `[voice] prompt` with your names and jargon also helps |
+| Wrong language | Auto-detect chose badly on a short phrase: set `[voice] language` (`en`, `hi`, ...) and restart. A `.en` model ignores language entirely — it cannot do other languages at all |
 
 ## Verified
 
@@ -100,6 +124,10 @@ On this machine (2026-10-10), against the running sidecar:
 - **Transcription is correct.** Windows SAPI speech ("Hello Alan. What time is
   it in Tokyo?") converted to 16 kHz mono int16 and posted to
   `/transcribe_pcm_chunk` came back as exactly that sentence.
+- **The STT model is correct on both models.** The same SAPI clip posted to
+  `/transcribe_pcm_chunk` came back as exactly `"Hello Alan. What time is it in
+  Tokyo?"` under `tiny.en.pt` *and* `small.pt` — and the multilingual model
+  auto-detected `language: "en"` with no language hint given.
 - **The microphone path runs.** The client opened the default input device,
   streamed for the configured window, endpointed and exited cleanly; a silent
   room yields an empty transcript and `heard nothing`, never a hang.
