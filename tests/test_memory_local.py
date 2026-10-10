@@ -341,6 +341,44 @@ class LocalMemorySessionTest(unittest.TestCase):
         self.assertEqual(hits[0].content, "how to run the build pipeline",
                          "lexical fit outranks the session boost")
 
+    def test_context_block_preserves_the_session_order(self) -> None:
+        """The ordering `search` computed must be the ordering Alan reads.
+
+        Guards a bug found by hand *after* this suite was already green.
+        `MemoryProvider.context_block` calls `relevance.gate` on the hits it is
+        handed, and `gate` re-sorts by pure lexical score -- so a store that had
+        carefully blended a session bonus and a vector weight into one number
+        ended up rendering results in lexical order anyway. Correctly filtered,
+        wrong order, every other test still passing, and `search()` alone
+        looking perfectly healthy.
+
+        The importances here are not decorative: they are what the observer
+        actually writes (a failure matters more than a success), and they are
+        the only reason the older item out-scores the current one lexically.
+        Give both items the same importance and the bug hides.
+        """
+        self.mem.remember(MemoryItem(
+            content="filesystem.list(path=C:\\tmp\\older) failed: PermissionError",
+            level=MemoryLevel.L2_SESSION, type=MemoryType.EPISODE,
+            session_id="older", importance=0.7,
+        ))
+        self.mem.remember(MemoryItem(
+            content="Ran filesystem.list(path=D:\\data\\current) -> budget-q4.md",
+            level=MemoryLevel.L2_SESSION, type=MemoryType.EPISODE,
+            session_id="current", importance=0.45,
+        ))
+        hits = self.mem.search("what folder did you just list",
+                               top_k=2, session_id="current")
+        self.assertIn("budget-q4.md", hits[0].content,
+                      "precondition: search must already rank this session first")
+        block = self.mem.context_block("what folder did you just list",
+                                       top_k=2, session_id="current")
+        lines = [ln.strip()[3:] for ln in block.splitlines()
+                 if ln.strip().startswith("- ")]
+        self.assertEqual(len(lines), 2, "the older item must still be present")
+        self.assertIn("budget-q4.md", lines[0],
+                      f"the block must not re-sort away from search, got: {lines}")
+
     def test_without_a_session_hint_ordering_is_pure_relevance(self) -> None:
         self.mem.remember(MemoryItem(content="ran the build", session_id="s1"))
         self.mem.remember(MemoryItem(content="ran the build", session_id="s2"))
@@ -475,6 +513,44 @@ class LocalMemoryVectorTest(unittest.TestCase):
             self.assertLess(elapsed, 0.6, f"search waited {elapsed:.3f}s on the model")
         finally:
             mem.close()
+
+    def test_the_vector_signal_reaches_the_final_score(self) -> None:
+        """A cosine match must actually change the number that orders results.
+
+        Same content, same query, two stores: one with an embedder and one
+        without. If vectors only reordered candidates that `relevance.gate`
+        later re-sorted, the two scores would be identical and the embedder
+        would be decoration.
+        """
+        texts = [
+            "the quarterly numbers moved north that quarter",
+            "a completely unrelated note about painting",
+        ]
+        plain = LocalMemory(_tmp(), embedder=None)
+        vector = LocalMemory(_tmp(), embedder=_FakeEmbedder())
+        try:
+            for store in (plain, vector):
+                for text in texts:
+                    store.remember(MemoryItem(content=text))
+            # Embeddings are written by the background worker, so the rows are
+            # genuinely vector-less for a moment. Searching before it finishes
+            # would assert on the lexical-only path and prove nothing.
+            deadline = time.time() + 5.0
+            while time.time() < deadline and vector.stats()["embedded"] < 2:
+                time.sleep(0.05)
+            self.assertEqual(vector.stats()["embedded"], 2)
+            query = "the quarterly numbers that quarter"
+            a = plain.search(query, top_k=2)
+            b = vector.search(query, top_k=2)
+            self.assertEqual([i.content for i in a], [i.content for i in b],
+                             "vectors reorder, they do not invent results")
+            self.assertGreater(b[0].score, a[0].score,
+                               "the cosine weight must survive into the score")
+        finally:
+            plain.close()
+            vector.close()
+            shutil.rmtree(plain.root, ignore_errors=True)
+            shutil.rmtree(vector.root, ignore_errors=True)
 
     def test_import_records_adopts_another_backend(self) -> None:
         mem = LocalMemory(self.root, embedder=None)

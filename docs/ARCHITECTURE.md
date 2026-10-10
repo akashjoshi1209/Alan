@@ -620,6 +620,19 @@ a backend proposed. Ranking bonuses (level, importance, confidence) are only
 ever applied *after* a real overlap is required -- if a bonus could raise a
 zero, the loudest unrelated note in the store would get asserted.
 
+That inheritance has a sharp edge, and it cost a working store a real bug:
+**`gate` re-sorts by lexical score.** A backend that blends its own signals --
+a session bonus, a vector weight -- into one number and then hands the result
+to `gate` gets its ordering silently replaced by pure lexical order. It is
+filtered correctly, ordered as if the extra signals did not exist, and every
+test still passes because the filtering assertions are all about *membership*.
+`LocalMemory` therefore applies the gate's filter in `_candidates` (nothing
+scoring zero is ever a candidate) and overrides `context_block` to render its
+already-gated hits without re-gating them. Any provider that computes its own
+blended ordering must do the same, and
+`tests/test_memory_local.py::LocalMemorySessionTest::test_context_block_preserves_the_session_order`
+is the test that catches the difference.
+
 Semantic recall is kept as the candidate generator. What is removed is the
 backend's authority to decide what Alan claims to know, which is the one thing
 this product promised and the one thing it could not previously deliver:

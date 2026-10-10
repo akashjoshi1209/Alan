@@ -53,7 +53,6 @@ from __future__ import annotations
 import json
 import os
 import queue
-import re
 import sqlite3
 import threading
 import time
@@ -63,10 +62,11 @@ from typing import Any, Iterable, Sequence
 
 from ...config import DATA_DIR
 from ...core.probecache import probe
-from ...interfaces.memory import MemoryProvider
+from ...interfaces.memory import MemoryProvider, render_block
 from ...interfaces.types import MemoryItem, MemoryLevel, MemoryType
 from ..relevance import score as relevance_score
 from ..relevance import session_bonus
+from ..relevance import terms as query_terms
 
 #: Candidates pulled out of FTS before scoring. Ample for a personal store,
 #: and the FTS query itself is the cheap part.
@@ -621,11 +621,44 @@ class LocalMemory(MemoryProvider):
             scored.append((total, item))
         scored.sort(key=lambda pair: pair[0], reverse=True)
 
-        # The gate, not the ordering, decides what may be asserted as memory.
-        from ..relevance import gate
-
-        hits = gate(query, [item for _score, item in scored])
+        # The zero-overlap half of the gate was already applied in
+        # `_candidates` (nothing with `relevance.score <= 0` was ever a
+        # candidate), so what is left is to record *why* each survivor ranked
+        # where it did. Calling `relevance.gate` again here would re-sort by
+        # pure lexical score and silently discard the session bonus and the
+        # vector weight computed just above -- the memory would be filtered
+        # correctly and then ordered as if neither existed.
+        hits: list[MemoryItem] = []
+        for total, item in scored:
+            if total <= 0:
+                continue
+            item.score = total
+            hits.append(item)
         return hits[:top_k]
+
+    def context_block(
+        self,
+        query: str,
+        *,
+        top_k: int = 5,
+        max_chars: int = 2000,
+        hits: Sequence[MemoryItem] | None = None,
+        session_id: str | None = None,
+    ) -> str:
+        """Render already-gated hits without re-gating them.
+
+        The base implementation calls `relevance.gate` a second time. Here that
+        would undo the ordering `search` just computed -- same trap as above,
+        one frame higher, and the visible one: it decides what Alan actually
+        reads. The gate's *filtering* is already done; only its re-sort is
+        unwanted.
+        """
+        if hits is None:
+            try:
+                hits = self.search(query, top_k=top_k, session_id=session_id)
+            except Exception:  # noqa: BLE001 - memory is an enhancement
+                return ""
+        return render_block(hits, max_chars=max_chars)
 
     def _candidates(
         self, query: str, terms: set[str]
@@ -825,15 +858,15 @@ def _as_tags(value: Any) -> list[str]:
 
 
 def _terms(text: str) -> set[str]:
-    stop = {
-        "a", "an", "and", "are", "as", "at", "be", "by", "for", "from", "has",
-        "have", "how", "i", "in", "is", "it", "me", "my", "of", "on", "or",
-        "that", "the", "this", "to", "was", "were", "what", "when", "where",
-        "which", "who", "will", "with", "you", "your",
-    }
-    return {
-        t for t in re.findall(r"[a-z0-9]+", (text or "").lower()) if t not in stop
-    }
+    """Terms for the FTS narrowing query.
+
+    Deliberately :func:`alan.memory.relevance.terms` and not a private copy:
+    the candidates FTS returns are scored by that module's ``score``, and two
+    independent stopword lists mean the two can quietly disagree about what
+    counts as a word -- which is a recall bug that only shows up as a missing
+    memory. ``json_store`` still carries its own copy; this store does not.
+    """
+    return query_terms(text)
 
 
 def _to_item(row: sqlite3.Row) -> MemoryItem:
