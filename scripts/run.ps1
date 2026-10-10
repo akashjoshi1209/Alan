@@ -24,36 +24,50 @@ $env:PYTHONUTF8 = '1'
 $env:PYTHONDONTWRITEBYTECODE = '1'
 $env:PATH = $pyDir + ';' + (Join-Path $pyDir 'Scripts') + ';' + $env:PATH
 
-# Start the bundled Ollama server (models live in models\) if it is not already up.
+# A port check, not a web request: TcpClient's connect is the only thing the
+# launcher needs, and it answers in milliseconds either way. (An
+# Invoke-WebRequest round-trip here used to be most of the launcher's
+# non-Python time.)
+function Test-Port {
+    param([int]$Port)
+    $client = New-Object System.Net.Sockets.TcpClient
+    try {
+        $task = $client.ConnectAsync('127.0.0.1', $Port)
+        return ($task.Wait(750) -and $client.Connected)
+    } catch {
+        return $false   # refused or faulted: the port is not serving
+    } finally {
+        $client.Dispose()
+    }
+}
+
+# Start the bundled Ollama server (models live in models\) if it is not
+# already up -- but never *wait* for it: a cloud-provider chat does not need
+# it, and a local-model request that arrives before it is ready fails with a
+# message instead of a prompt that sits frozen for half a minute.
 $ollamaExe = Join-Path $root 'env\ollama\ollama.exe'
 if ((Test-Path $ollamaExe) -and ($env:ALAN_NO_OLLAMA -ne '1')) {
     $env:OLLAMA_MODELS = (Join-Path $root 'models')
     $env:OLLAMA_HOST   = "127.0.0.1:$ollamaPort"
-    $listening = $false
-    try {
-        Invoke-WebRequest -Uri "http://127.0.0.1:$ollamaPort/api/tags" -UseBasicParsing -TimeoutSec 2 | Out-Null
-        $listening = $true
-    } catch { }
-    if (-not $listening) {
+    if (-not (Test-Port $ollamaPort)) {
         try { Start-Process -FilePath $ollamaExe -ArgumentList 'serve' -WindowStyle Hidden } catch { }
-        # Wait for the bundled server to accept connections (first launch can take a few seconds).
-        for ($i = 0; $i -lt 30; $i++) {
-            Start-Sleep -Seconds 1
-            try {
-                Invoke-WebRequest -Uri "http://127.0.0.1:$ollamaPort/api/tags" -UseBasicParsing -TimeoutSec 3 | Out-Null
-                break
-            } catch { }
-        }
     }
 }
 
 # Start the Cognee memory sidecar for chat/ask (keyless local memory).
+#
+# Detached and never waited on, and completely silent when it is already up:
+# opening a chat window must not queue behind a sidecar's boot or narrate it.
+# Until cognee answers, memory falls back to the local JSON store -- `alan
+# doctor` names which one is in use, so the fallback is visible, never silent.
 $cmd = if ($args.Count -eq 0) { 'chat' } else { [string]$args[0] }
 $cogneePy = Join-Path $root 'env\cognee\python\python.exe'
 if (($cmd -in @('chat', 'ask')) -and ($env:ALAN_NO_MEMORY -ne '1') -and (Test-Path $cogneePy)) {
     $serve = Join-Path $root 'scripts\cognee-serve.ps1'
-    if (Test-Path $serve) {
-        try { & $serve | Out-Null } catch { Write-Warning "Memory sidecar did not start; continuing without memory." }
+    if ((Test-Path $serve) -and (-not (Test-Port 8012))) {
+        try {
+            Start-Process -FilePath 'powershell' -ArgumentList '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $serve -WindowStyle Hidden
+        } catch { Write-Warning "Memory sidecar did not start; continuing without memory." }
     }
 }
 

@@ -21,6 +21,7 @@ search results drive which instructions a model follows.
 
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -182,6 +183,58 @@ def _tokens(text: str) -> list[str]:
     return [t for t in re.split(r"[^a-z0-9]+", text.lower()) if t]
 
 
+# -- the catalog cache -------------------------------------------------------
+
+#: Sits *beside* the tree it describes (``vendor\ECC.catalog-cache.json``):
+#: it travels with the folder the way this product expects folders to move,
+#: and it never writes inside the vendored tree itself.
+_CACHE_SUFFIX = ".catalog-cache.json"
+
+
+def _fingerprint(root: Path) -> dict[str, list[int]]:
+    """``{relative path: [mtime_ns, size]}`` for every entry file.
+
+    A stat, not a read -- this is the whole point of the cache's validator:
+    proving nothing changed must cost a fraction of the parse it spares.
+    """
+    out: dict[str, list[int]] = {}
+    for folder, pattern in (("skills", "*/SKILL.md"), ("commands", "*.md"), ("agents", "*.md")):
+        base = root / folder
+        if not base.is_dir():
+            continue
+        for doc in sorted(base.glob(pattern)):
+            try:
+                st = doc.stat()
+            except OSError:
+                continue
+            out[str(doc.relative_to(root))] = [st.st_mtime_ns, st.st_size]
+    return out
+
+
+def _entry_to_json(entry: Skill) -> dict[str, Any]:
+    return {
+        "kind": entry.kind,
+        "name": entry.name,
+        "description": entry.description,
+        "content": entry.content,
+        "path": str(entry.path),
+        "metadata": entry.metadata,
+        "argument_hint": entry.argument_hint,
+    }
+
+
+def _entry_from_json(data: dict[str, Any]) -> Skill:
+    return Skill(
+        kind=str(data["kind"]),
+        name=str(data["name"]),
+        description=str(data.get("description") or ""),
+        content=str(data.get("content") or ""),
+        path=Path(str(data["path"])),
+        metadata={str(k): str(v) for k, v in (data.get("metadata") or {}).items()},
+        argument_hint=str(data.get("argument_hint") or ""),
+    )
+
+
 # -- the catalog -------------------------------------------------------------
 
 _SLASH = re.compile(r"^\s*/([A-Za-z0-9][\w-]*)")
@@ -197,7 +250,23 @@ class EccCatalog:
 
     @classmethod
     def load(cls, root: Path) -> "EccCatalog":
-        """Read every entry under ``root``. Missing folders are simply absent."""
+        """Read every entry under ``root``. Missing folders are simply absent.
+
+        Parsing ~450 markdown files costs about a second -- long enough to
+        feel at every prompt -- so the parsed catalog is cached beside the
+        tree and validated by stat (mtime + size per entry): an edit
+        invalidates itself, a moved folder simply misses, and any cache
+        problem falls through to a full read. The cache can therefore only
+        ever save time, never change the answer.
+        """
+        cache_path = root.parent / f"{root.name}{_CACHE_SUFFIX}"
+        files = _fingerprint(root)
+        try:
+            blob = json.loads(cache_path.read_text(encoding="utf-8"))
+            if blob.get("files") == files:
+                return cls(root, [_entry_from_json(d) for d in blob["entries"]])
+        except (OSError, ValueError, KeyError, TypeError):
+            pass  # missing, unreadable or stale: fall through to a full read
         entries: list[Skill] = []
         skills_dir = root / "skills"
         if skills_dir.is_dir():
@@ -214,6 +283,19 @@ class EccCatalog:
                     entry = _read_entry(kind, doc.stem, doc)
                     if entry is not None:
                         entries.append(entry)
+        try:
+            cache_path.write_text(
+                json.dumps(
+                    {
+                        "files": files,
+                        "entries": [_entry_to_json(e) for e in entries],
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+        except OSError:
+            pass  # a read-only folder is not a reason to fail a load
         return cls(root, entries)
 
     # -- lookup ---------------------------------------------------------

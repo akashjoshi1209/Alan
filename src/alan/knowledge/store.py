@@ -23,18 +23,32 @@ import sqlite3
 import threading
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Sequence
+from typing import Any, Sequence
 
 from .chunker import TextChunk
 from .loaders import LoadedDoc
 
-try:  # numpy is present in Alan's environment; lexical search must work without it
-    import numpy as _np
+# numpy, imported on first use rather than at module import. It is ~200ms of
+# every Alan start, paid for a module that most commands -- `version`,
+# `doctor`, a chat prompt before the first brain lookup -- never call. The
+# degrade path is unchanged: lexical search works without it, and a missing
+# or broken numpy still just means "no vectors" (see _numpy's callers).
+_NP: Any = None
+_NP_TRIED = False
 
-    _NUMPY = True
-except Exception:  # noqa: BLE001 - degrade to lexical-only
-    _np = None  # type: ignore[assignment]
-    _NUMPY = False
+
+def _numpy() -> Any:
+    """The numpy module, or ``None`` when it is absent -- resolved once."""
+    global _NP, _NP_TRIED
+    if not _NP_TRIED:
+        _NP_TRIED = True
+        try:
+            import numpy
+
+            _NP = numpy
+        except Exception:  # noqa: BLE001 - degrade to lexical-only
+            _NP = None
+    return _NP
 
 SCHEMA_VERSION = 1
 
@@ -250,7 +264,8 @@ class KnowledgeStore:
 
     def load_vectors(self) -> tuple[list[int], "list | None", "object | None"]:
         """``(ids, doc_ids, matrix)`` for every stored vector, or ``([], None, None)``."""
-        if not _NUMPY:
+        np = _numpy()
+        if np is None:
             return [], None, None
         with self._lock:
             rows = self._conn.execute(
@@ -265,7 +280,7 @@ class KnowledgeStore:
             dims = int(row["dims"] or 0)
             if not blob or dims <= 0:
                 continue
-            array = _np.frombuffer(blob, dtype=_np.float32)
+            array = np.frombuffer(blob, dtype=np.float32)
             if array.shape[0] != dims:
                 continue
             ids.append(int(row["id"]))
@@ -273,7 +288,7 @@ class KnowledgeStore:
             vectors.append(array)
         if not vectors:
             return [], None, None
-        return ids, doc_ids, _np.vstack(vectors)
+        return ids, doc_ids, np.vstack(vectors)
 
     def chunks_by_ids(self, ids: Sequence[int]) -> dict[int, dict]:
         """Full chunk + document rows for the given chunk ids."""
@@ -388,9 +403,10 @@ def fts_query(text: str, operator: str = "AND") -> str:
 
 
 def _pack_vector(vector: Sequence[float] | None) -> tuple[bytes | None, int]:
-    if not vector or not _NUMPY:
+    np = _numpy()
+    if not vector or np is None:
         return None, 0
-    array = _np.asarray(vector, dtype=_np.float32)
+    array = np.asarray(vector, dtype=np.float32)
     if array.ndim != 1 or array.shape[0] == 0:
         return None, 0
     return array.tobytes(), int(array.shape[0])

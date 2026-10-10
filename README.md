@@ -58,12 +58,17 @@ or renamed without a reinstall (`ALAN_HOME` overrides it).
 
 ```powershell
 cd D:\Alan
-scripts\run.ps1                 # interactive chat at the you> prompt
-scripts\run.ps1 ask "What is the capital of France?"
-scripts\run.ps1 doctor          # is everything wired up?
+Alan.cmd                    # interactive chat at the you> prompt
+Alan.cmd ask "What is the capital of France?"
+Alan.cmd doctor             # is everything wired up?
 ```
 
-Or double-click `Alan.cmd` in the folder root.
+Or double-click `Alan.cmd` in the folder root -- or, after
+`scripts\install-command.ps1`, just type `alan` from any prompt. That path is
+cmd and Python directly (no PowerShell in between), so the prompt draws in
+about two seconds. `scripts\run.ps1` is the full launcher -- same commands,
+sidecar lifecycle visible -- and `run.ps1 voice` the only flow that still
+needs it.
 
 First launch starts the bundled Ollama server and uses the local model in
 `models\`. Add a cloud key later if you want a bigger brain.
@@ -442,7 +447,7 @@ the one-line clone command. ECC's hooks are deliberately *not* ported. Details:
 
 ```
 <home>\Alan\
-├─ Alan.cmd                 # double-click launcher
+├─ Alan.cmd                 # direct launcher (cmd + python, no PowerShell)
 ├─ README.md
 ├─ requirements.txt         # pins for env\python (see the file for what it excludes)
 ├─ config\
@@ -560,7 +565,7 @@ scripts\install-command.ps1 -Uninstall  # restore PATH exactly as it was
 | `code.test` takes a minute, or "collects 0 tests" | Fixed by `pytest.ini`, which pins `testpaths = tests`. Without it `pytest` walked `env\python` and `env\browser\python`, burned 73 s collecting, and collected none of Alan's own tests |
 | `alan` is not recognised | Open a **new** command prompt — PATH is only read when a window starts. Check with `scripts\install-command.ps1 -Status` |
 | `alan: cannot find Alan at "..."` | `ALAN_HOME` points somewhere without `Alan.cmd`. Run `scripts\install-command.ps1` from Alan's real folder. A stray trailing space or backslash also causes this |
-| PowerShell blocks scripts | Use `Alan.cmd` (it sets the bypass flag) |
+| PowerShell blocks scripts | Chat doesn't go near PowerShell anymore: use `Alan.cmd` (or `alan`). The paths that still do -- `voice`, `scripts\run.ps1` -- pass `-ExecutionPolicy Bypass` themselves |
 | `browser-serve.ps1 > out.txt` leaves the file locked | Expected: `Start-Process` inherits handles, so the sidecar holds a copy until it exits |
 
 ---

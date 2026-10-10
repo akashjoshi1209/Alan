@@ -32,6 +32,7 @@ from .core.scheduler import parse_when
 from .interfaces.types import PermissionRequest
 from .llm import ProviderError, known_providers
 from .memory import CogneeMemory
+from .sidecars import ensure_detached
 
 # Rich prints box-drawing glyphs (the plan table's borders, the step bullets),
 # and on a Windows console still reporting cp1252 those raise
@@ -588,6 +589,10 @@ def _confirm_on_console(request: PermissionRequest) -> bool:
 
 
 def _one_shot(text: str, use_stream: bool) -> None:
+    # Kicked off before the runtime is built so a sidecar that is down boots
+    # in parallel with startup instead of being waited on: memory falls back
+    # to JSON until it answers, and doctor names which one is in use.
+    ensure_detached()
     try:
         alan = Alan(confirmer=_confirm_on_console)
     except ProviderError as exc:
@@ -701,6 +706,9 @@ def chat(
     ),
 ) -> None:
     """Start an interactive conversation with Alan."""
+    # Same fire-and-forget ensure as `ask`: started before the runtime build
+    # so a cold cognee warms up in parallel with startup, never in front of it.
+    ensure_detached()
     try:
         alan = Alan(confirmer=_confirm_on_console)
     except ProviderError as exc:

@@ -83,6 +83,10 @@ class AlanRuntime:
     memory_note: str = ""
     model_note: str = ""
     browser_note: str = ""
+    #: The browser probe, deferred out of ``build_runtime`` so ordinary
+    #: commands never pay it: run on first ``status()`` (see the comment at
+    #: the build site). None when the browser is disabled or already probed.
+    browser_probe: Callable[[], str] | None = None
     internet_note: str = ""
     vibecoder_note: str = ""
     #: Second-brain state for ``alan doctor``: doc/chunk counts and whether
@@ -101,12 +105,28 @@ class AlanRuntime:
     def trace(self, trace_id: str) -> list[dict[str, Any]]:
         return [event.to_dict() for event in self.bus.trace(trace_id)]
 
+    def _browser_note(self) -> str:
+        """The browser note, probing on first ask and never after.
+
+        ``build_runtime`` skips this probe on purpose (the comment there is
+        the long version): with the sidecar down it costs a connect timeout,
+        and only ``status`` -- ``alan doctor``, ``/activity`` -- reads the
+        answer. ``doctor`` clears the probe cache first, so the deferred
+        answer is still the truth about right now.
+        """
+        if self.browser_probe is not None:
+            self.browser_note = self.browser_probe()
+            self.browser_probe = None
+        return self.browser_note
+
     def status(self) -> dict[str, Any]:
         """A single dict describing the whole system, for ``alan doctor``."""
         # Imported here rather than at module scope: voice probes the sidecar
         # over HTTP, which is cheap for a diagnostic and not cheap enough to
         # run on every command that builds a runtime.
         from . import voice as voice_module
+
+        browser_note = self._browser_note()
 
         models = [
             {"provider": p.name, "model": p.model, "local": p.local,
@@ -124,9 +144,9 @@ class AlanRuntime:
             ),
             "tools": [spec.name for spec in self.registry.specs()],
             "browser": (
-                {"provider": self.browser.name, "note": self.browser_note}
+                {"provider": self.browser.name, "note": browser_note}
                 if self.browser
-                else {"provider": None, "note": self.browser_note}
+                else {"provider": None, "note": browser_note}
             ),
             "internet": (
                 {"provider": "internet", "note": self.internet_note}
@@ -479,15 +499,23 @@ def build_runtime(
     # worth surfacing at `alan doctor`, not a silent no-op at first use.
     browser: BrowserProvider | None = None
     browser_note = "disabled"
+    browser_probe: Callable[[], str] | None = None
     if settings.tools.browser:
         browser = SidecarBrowser(settings.browser.base_url, timeout=settings.browser.timeout)
-        ok, reason = browser.available()
-        # The provider reports *what* is wrong; the command to fix it belongs
-        # here, because this is the layer that writes for a human. Naming the
-        # port without the script leaves the reader to go and find it.
-        browser_note = reason if ok else (
-            f"{reason} - start it with scripts\\browser-serve.ps1"
-        )
+        # Probed on first status(), not here: with the sidecar down the
+        # probe costs a full TCP connect timeout (measured: 2s, paid on
+        # every single `alan chat`) for an answer only the diagnostic and
+        # the browser itself read. Deferring it makes opening a chat window
+        # not care whether a browser is running, while `alan doctor` -- which
+        # forgets the probe cache before it asks -- still reports the truth.
+        def _probe_browser(_browser: BrowserProvider = browser) -> str:
+            ok, reason = _browser.available()
+            return reason if ok else (
+                f"{reason} - start it with scripts\\browser-serve.ps1"
+            )
+
+        browser_probe = _probe_browser
+        browser_note = ""  # resolved by AlanRuntime._browser_note()
 
     # The internet backends are zero-config: `available()` only asks whether
     # mcporter and curl exist, so probing costs nothing and starts nothing.
@@ -629,6 +657,7 @@ def build_runtime(
         memory_note=memory_note,
         model_note=model_note,
         browser_note=browser_note,
+        browser_probe=browser_probe,
         internet_note=internet_note,
         knowledge=knowledge,
         knowledge_embedder=knowledge_embedder,
