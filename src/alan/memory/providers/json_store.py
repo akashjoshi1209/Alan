@@ -1,13 +1,14 @@
 """A dependency-free, file-backed :class:`MemoryProvider`.
 
-This is Alan's default when the cognee sidecar is unavailable, and the store the
-test suite uses. It implements the full contract, honours the L0-L5 hierarchy,
-and needs no model, no embeddings and no network.
+This is the dependency-free fallback: what Alan's memory still does when the
+default SQLite store cannot be written, and the store the test suite uses. It
+implements the full contract, honours the L0-L5 hierarchy, and needs no model,
+no embeddings and no network.
 
-Search is lexical (token overlap + phrase bonus). That is deliberately weaker
-than the cognee sidecar's semantic recall, and the orchestrator treats this
-store as a fallback rather than a competitor: it is what keeps Alan useful when
-the sidecar is down.
+Search is lexical (token overlap + phrase bonus), which is deliberately weaker
+than the default store's hybrid recall. The orchestrator treats this as a
+fallback rather than a competitor: it is what keeps Alan useful when the real
+store is broken.
 """
 
 from __future__ import annotations
@@ -145,6 +146,21 @@ class JsonMemory(MemoryProvider):
                     item.touched()
                     return item
         return None
+
+    def items(self) -> list[MemoryItem]:
+        """Every stored item, oldest first.
+
+        The JSON store files one level at a time, so the natural read is
+        grouped by level -- but a person cleaning up wants the order things
+        were written in, and that is what the timestamp gives.
+        """
+        found: list[MemoryItem] = []
+        for level in MemoryLevel:
+            try:
+                found.extend(self._load(level))
+            except Exception:  # noqa: BLE001 - one unreadable file is not fatal
+                continue
+        return sorted(found, key=lambda item: item.timestamp)
 
     def search(
         self,

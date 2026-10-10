@@ -1,6 +1,7 @@
 """The memory interface Alan owns.
 
-Every memory backend (the cognee sidecar, mem0, the local JSON store) implements
+Every memory backend (the local SQLite store, the cognee sidecar, mem0, the
+local JSON store) implements
 :class:`MemoryProvider`. Nothing outside ``alan.memory.providers`` may import a
 backend library, so the backend stays replaceable (ADR-002).
 
@@ -92,6 +93,19 @@ class MemoryProvider(ABC):
         Promotion is an explicit decision by the orchestrator, never a side
         effect of writing.
         """
+
+    # -- listing -------------------------------------------------------
+    def items(self) -> Sequence[MemoryItem]:
+        """Every stored item, unranked and ungated.
+
+        `search` cannot serve the one workflow that needs the whole store:
+        forgetting must *see* what exists, and a relevance-ranked, gated query
+        omits exactly the stale items a cleanup exists to remove. A backend
+        that cannot enumerate returns an empty sequence rather than guessing --
+        `alan forget --list` reporting nothing is recoverable, deleting the
+        wrong thing is not.
+        """
+        return ()
 
     # -- context helper ------------------------------------------------
     def context_block(

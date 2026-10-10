@@ -752,6 +752,27 @@ class LocalMemory(MemoryProvider):
             return []
         return [_to_item(row) for row in rows]
 
+    #: A listing is loaded whole, so it is bounded. A store that has grown
+    #: past this is past the point where a terminal table is the right tool,
+    #: and `--all` does not need the rows to delete them.
+    _LIST_LIMIT = 5000
+
+    def items(self) -> list[MemoryItem]:
+        """Every stored item, oldest first.
+
+        Ordering is chronological rather than ranked: this exists so `alan
+        forget --list` can show what is stored, and what a person cleaning up
+        wants to read is the sequence in which things were written.
+        """
+        try:
+            rows = self._conn().execute(
+                "SELECT * FROM memories ORDER BY ts_epoch ASC, id ASC LIMIT ?",
+                (self._LIST_LIMIT,),
+            ).fetchall()
+        except sqlite3.Error:
+            return []
+        return [_to_item(row) for row in rows]
+
     def forget_session(self, session_id: str) -> int:
         """Drop everything recorded for one session.
 

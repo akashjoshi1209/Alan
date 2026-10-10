@@ -143,7 +143,7 @@ everything:
 /remember TEXT        store a note
 /recall QUERY         search memory
 /memory               memory status
-/forget               erase the memory dataset
+/forget               clear this session's memory
 /schedule add "TASK"  --when "every morning"
 /activity             tasks, approvals, recent runs
 /approve ID           let a waiting task run
@@ -223,9 +223,14 @@ matters.
 - **Automatic** — durable facts are remembered after the reply; tool calls and
   agent runs are recorded as they happen, off the same event bus everything
   else reports through.
-- **Manual** — in `chat`: `/remember TEXT`, `/recall QUERY`, `/memory`,
-  `/forget`.
+- **Manual** — in `chat`: `/remember TEXT`, `/recall QUERY`, `/memory`, and
+  `/forget`, which clears **this session's** memory. Erasing everything is
+  `alan forget --all --yes` from a shell, where a confirmation is required —
+  one keystroke in a live conversation must not be able to erase every durable
+  fact you have given it.
 - **CLI** — `scripts\run.ps1 ingest "..."` or `scripts\run.ps1 memory "query"`.
+  `alan forget --list` shows what is actually stored, and `--contains TEXT`
+  removes matches.
 
 **It is fast, because nothing has to boot.** Recall runs in ~60 ms with
 embeddings and ~3 ms without, against a measured 1.5 s (and 24 s cold) from the

@@ -29,7 +29,7 @@ from uuid import uuid4
 
 from alan.core.events import EventBus, Events
 from alan.interfaces.memory import MemoryProvider
-from alan.interfaces.types import MemoryItem, MemoryLevel, MemoryType
+from alan.interfaces.types import MemoryItem, MemoryLevel, MemoryType, utcnow
 from alan.memory.observer import MemoryObserver
 from alan.memory.providers.local_store import LocalMemory, derive_kind
 
@@ -220,6 +220,50 @@ class LocalMemoryPersistenceTest(unittest.TestCase):
         finally:
             a.close()
             b.close()
+
+    def test_items_lists_the_whole_store_chronologically(self) -> None:
+        """What `alan forget --list` reads.
+
+        Chronological rather than relevance-ranked: a person cleaning up wants
+        the order things were written in, and `search` would hide the stale
+        entries that are the entire reason to look.
+
+        The timestamps are explicit. Asserting on insertion order means racing
+        the clock, and two `remember()` calls in a tight loop can land on the
+        same reading -- which made this pass alone and fail one run in three
+        under load, with nothing wrong in the store.
+        """
+        store = LocalMemory(self.root, embedder=None)
+        try:
+            for n, text in enumerate(("first written", "second written",
+                                      "third written"), start=1):
+                store.remember(MemoryItem(
+                    content=text,
+                    level=MemoryLevel.L4_USER,
+                    timestamp=utcnow().replace(microsecond=n),
+                ))
+            listed = store.items()
+            self.assertEqual([i.content for i in listed],
+                             ["first written", "second written",
+                              "third written"])
+            self.assertEqual(len(listed), store.stats()["total"],
+                             "listing must agree with the store's own count")
+        finally:
+            store.close()
+
+    def test_items_includes_session_episodes(self) -> None:
+        """A fact-only listing would make every episode invisible to cleanup."""
+        store = LocalMemory(self.root, embedder=None)
+        try:
+            store.remember(MemoryItem(content="a durable fact",
+                                      level=MemoryLevel.L4_USER))
+            store.remember(MemoryItem(content="a tool episode",
+                                      level=MemoryLevel.L2_SESSION,
+                                      type=MemoryType.EPISODE,
+                                      session_id="s1"))
+            self.assertEqual(len(store.items()), 2)
+        finally:
+            store.close()
 
 
 class LocalMemoryRetrievalTest(unittest.TestCase):

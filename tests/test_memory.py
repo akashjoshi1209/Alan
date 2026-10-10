@@ -1,4 +1,7 @@
-"""Offline tests for Alan's cognee memory client - no network, stdlib only.
+"""Offline tests for Alan's memory layer - no network, stdlib only.
+
+Covers the cognee client, the provider factory and the fallback note, the
+JSON store, and the `items()` enumeration contract every backend must honour.
 
 Run with:  python -m unittest discover -s tests
 """
@@ -386,6 +389,63 @@ class BackendFallbackNoteTest(unittest.TestCase):
         finally:
             runtime.close()
         self.assertNotIn("cognee-serve.ps1", note)
+
+
+class ItemsContractTest(unittest.TestCase):
+    """Every backend must answer the same question about its whole store.
+
+    `forget --list` and `--contains` need to enumerate. When the default
+    backend became the SQLite store these commands kept working on paper and
+    listed nothing, because they reached for internals only two providers
+    still exposed. The contract now lives on the interface, so a backend that
+    cannot enumerate says so in a way the caller can see.
+    """
+
+    def test_the_default_enumeration_is_empty_not_a_guess(self) -> None:
+        """A backend that never implemented `items()` still satisfies the ABC.
+
+        `_FakeMemory` predates the method, so it is exactly the case this
+        guards: enumeration must fall back to "cannot list" rather than raise,
+        because the caller's response to an empty list is to say so.
+        """
+        self.assertEqual(list(_FakeMemory().items()), [],
+                         "a backend that cannot list must return nothing")
+
+    def test_json_store_lists_everything_it_holds(self) -> None:
+        import shutil
+        import tempfile
+
+        from alan.interfaces.types import utcnow
+
+        root = tempfile.mkdtemp()
+        try:
+            store = JsonMemory(root)
+            # Explicit timestamps: insertion order is not a guarantee of the
+            # contract, and racing two `remember()` calls makes an ordering
+            # test pass alone and fail under load with nothing wrong.
+            store.remember(MemoryItem(content="first note written",
+                                      level=MemoryLevel.L4_USER,
+                                      timestamp=utcnow().replace(microsecond=1)))
+            store.remember(MemoryItem(content="second note written",
+                                      level=MemoryLevel.L2_SESSION,
+                                      timestamp=utcnow().replace(microsecond=2)))
+            listed = store.items()
+            self.assertEqual(len(listed), 2)
+            self.assertEqual([i.content for i in listed],
+                             ["first note written", "second note written"],
+                             "listing is chronological, not level-grouped")
+        finally:
+            shutil.rmtree(root, ignore_errors=True)
+
+    def test_an_empty_store_lists_nothing(self) -> None:
+        import shutil
+        import tempfile
+
+        root = tempfile.mkdtemp()
+        try:
+            self.assertEqual(JsonMemory(root).items(), [])
+        finally:
+            shutil.rmtree(root, ignore_errors=True)
 
 
 if __name__ == "__main__":

@@ -31,7 +31,6 @@ from .config import (
 from .core.scheduler import parse_when
 from .interfaces.types import PermissionRequest
 from .llm import ProviderError, known_providers
-from .memory import CogneeMemory
 from .sidecars import ensure_detached
 
 # Rich prints box-drawing glyphs (the plan table's borders, the step bullets),
@@ -171,7 +170,7 @@ _HELP_SECTIONS = [
         ("/remember TEXT", "store a memory"),
         ("/recall QUERY", "search memory"),
         ("/memory", "memory status"),
-        ("/forget", "clear this dataset's memory"),
+        ("/forget", "clear this session's memory"),
     ]),
     ("always-on", [
         ("/activity", "tasks, approvals, recent runs"),
@@ -375,53 +374,114 @@ def providers() -> None:
 def memory(
     query: Optional[str] = typer.Argument(None, help="Optional query to test a recall."),
 ) -> None:
-    """Show persistent-memory status (cognee sidecar)."""
-    settings = load_settings()
-    mem = CogneeMemory(settings.memory)
-    health = mem.health()
-    if health is None:
-        console.print("[red]memory sidecar: unreachable[/red]")
-        console.print(
-            f"[dim]{settings.memory.base_url} — start it with scripts\\cognee-serve.ps1[/dim]"
-        )
+    """Show persistent-memory status."""
+    provider, note = _open_memory()
+    if provider is None:
+        console.print(f"[red]no memory backend: {note}[/red]")
         raise typer.Exit(code=1)
-    console.print(
-        f"[green]memory sidecar: ready[/green] [dim](cognee {health.get('version', '?')})[/dim]"
+    try:
+        console.print(f"[green]memory: {provider.name}[/green] [dim]{note}[/dim]")
+        # Only a store that owns its rows can say how many it holds. Asking a
+        # remote backend to count would be another round trip for a number
+        # `alan backends` already reports more honestly.
+        stats = getattr(provider, "stats", None)
+        if callable(stats):
+            data = stats()
+            console.print(
+                f"[dim]items: {data.get('total', 0)}   "
+                f"sessions: {data.get('sessions', 0)}   "
+                f"embedded: {data.get('embedded', 0)}   "
+                f"size: {_human_bytes(data.get('db_bytes', 0))}[/dim]"
+            )
+            by_level = data.get("by_level") or {}
+            if by_level:
+                table = Table(title="by level")
+                table.add_column("level")
+                table.add_column("items", justify="right")
+                for level, count in by_level.items():
+                    table.add_row(str(level), str(count))
+                console.print(table)
+        if query:
+            hits = provider.search(query, top_k=5)
+            if not hits:
+                console.print("[yellow]no memories matched[/yellow]")
+            for hit in hits:
+                console.print(Panel(hit.content, border_style="dim"))
+    finally:
+        _close_memory(provider)
+
+
+def _open_memory():
+    """Build the configured backend through the same factory everything uses.
+
+    `memory` and `ingest` used to construct ``CogneeMemory`` directly, which
+    meant both commands were broken the moment cognee stopped being the
+    default -- reporting an unreachable sidecar while a perfectly healthy
+    store sat one line away. One factory, one truth.
+    """
+    from .memory.providers import build_memory_provider
+
+    settings = load_settings()
+    return build_memory_provider(
+        settings.memory,
+        model=settings.ollama.model,
+        ollama_base_url=settings.ollama.base_url,
     )
-    console.print(
-        f"[dim]dataset: {settings.memory.dataset}   base_url: {settings.memory.base_url}[/dim]"
-    )
-    datasets = mem.datasets()
-    if datasets:
-        table = Table(title="memory datasets")
-        table.add_column("name")
-        table.add_column("id")
-        for item in datasets:
-            table.add_row(str(item.get("name", "")), str(item.get("id", "")))
-        console.print(table)
-    if query:
-        hits = mem.recall(query)
-        if not hits:
-            console.print("[yellow]no memories matched[/yellow]")
-        for hit in hits:
-            console.print(Panel(hit, border_style="dim"))
+
+
+def _close_memory(provider) -> None:
+    closer = getattr(provider, "close", None)
+    if callable(closer):
+        try:
+            closer()
+        except Exception:  # noqa: BLE001 - closing must not fail a command
+            pass
+
+
+def _human_bytes(size) -> str:
+    try:
+        value = float(size)
+    except (TypeError, ValueError):
+        return "?"
+    for unit in ("B", "KB", "MB", "GB"):
+        if value < 1024 or unit == "GB":
+            return f"{value:.0f} {unit}" if unit == "B" else f"{value:.1f} {unit}"
+        value /= 1024
+    return f"{value:.1f} GB"
 
 
 @app.command()
 def ingest(
     text: List[str] = typer.Argument(..., help="Text to store in Alan's memory."),
 ) -> None:
-    """Store a note in Alan's persistent memory (waits for indexing)."""
-    mem = CogneeMemory(load_settings().memory)
-    if not mem.available():
-        console.print("[red]memory sidecar unreachable — start scripts\\cognee-serve.ps1[/red]")
+    """Store a note in Alan's persistent memory."""
+    from .interfaces.types import MemoryItem, MemoryLevel
+
+    provider, note = _open_memory()
+    if provider is None:
+        console.print(f"[red]no memory backend: {note}[/red]")
         raise typer.Exit(code=1)
-    ok = mem.remember(" ".join(text), background=False)
-    if ok:
-        console.print("[green]stored in memory[/green]")
+    body = " ".join(text).strip()
+    if not body:
+        console.print("[red]nothing to store[/red]")
+        raise typer.Exit(code=1)
+    try:
+        # L4, not L2: this is a fact the user chose to persist, so it competes
+        # for recall after the session that wrote it is gone. The store derives
+        # its own `kind` label from the item, so `alan forget --list` can tell
+        # a note from an episode without the caller guessing.
+        provider.remember(MemoryItem(
+            content=body,
+            level=MemoryLevel.L4_USER,
+            source="user",
+        ))
+    except Exception as exc:  # noqa: BLE001 - report, do not traceback
+        console.print(f"[red]failed to store memory: {exc}[/red]")
+        raise typer.Exit(code=1)
     else:
-        console.print("[red]failed to store memory[/red]")
-        raise typer.Exit(code=1)
+        console.print("[green]stored in memory[/green]")
+    finally:
+        _close_memory(provider)
 
 
 @app.command()
@@ -449,10 +509,7 @@ def forget(
     `--all` is the one destructive path in Alan, so it needs `--yes` as well:
     a typo must not be able to erase the user's memory.
     """
-    from .memory.providers import build_memory_provider
-
-    settings = load_settings()
-    provider, note = build_memory_provider(settings.memory, model=settings.ollama.model)
+    provider, note = _open_memory()
     if provider is None:
         console.print(f"[red]no memory backend available: {note}[/red]")
         raise typer.Exit(code=1)
@@ -513,31 +570,146 @@ def forget(
             close()
 
 
+def _memory_slash(alan, user: str) -> bool:
+    """Handle ``/remember``, ``/recall``, ``/memory`` and ``/forget``.
+
+    Split out of the chat loop so it can be tested, because it was written
+    against the cognee client's API -- a ``remember`` that took a string and a
+    ``background`` flag, plus ``recall``, ``health`` and ``datasets`` -- and
+    every one of those raises on a provider. All four commands were broken the
+    day memory stopped defaulting to the sidecar, in the one surface a person
+    reaches for to check that memory works at all.
+
+    Returns True when the line was one of these commands.
+    """
+    from .interfaces.types import MemoryItem, MemoryLevel
+
+    if user.split(" ", 1)[0] not in ("/remember", "/recall", "/memory", "/forget"):
+        return False
+    if alan.memory is None:
+        console.print("[yellow]memory is disabled in config/settings.toml[/yellow]")
+        return True
+
+    store = alan.memory
+    if user.startswith("/remember"):
+        text = user[len("/remember"):].strip()
+        if not text:
+            console.print("[yellow]usage: /remember TEXT[/yellow]")
+            return True
+        # A durable fact, not a session note: what is typed here is meant to
+        # outlive the conversation that typed it.
+        with console.status("[dim]storing memory...[/dim]"):
+            try:
+                store.remember(MemoryItem(
+                    content=text,
+                    level=MemoryLevel.L4_USER,
+                    source="user",
+                ))
+            except Exception as exc:  # noqa: BLE001 - chat must survive this
+                console.print(f"[red]could not store memory: {exc}[/red]")
+            else:
+                console.print("[green]stored[/green]")
+    elif user.startswith("/recall"):
+        query = user[len("/recall"):].strip()
+        if not query:
+            # An empty query is not "match everything": a substring test
+            # against "" is true for every item, so the phrase bonus would
+            # pass the relevance gate wholesale and dump the store into the
+            # conversation.
+            console.print("[yellow]usage: /recall QUERY[/yellow]")
+            return True
+        try:
+            hits = store.search(query, top_k=5, session_id=alan.session_id)
+        except Exception as exc:  # noqa: BLE001
+            console.print(f"[red]recall failed: {exc}[/red]")
+            return True
+        if not hits:
+            console.print("[yellow]no memories matched[/yellow]")
+        for hit in hits:
+            label = str(hit.level).replace("MemoryLevel.", "")
+            console.print(Panel(hit.content, title=label, border_style="dim"))
+    elif user == "/memory":
+        healthy, detail = store.available()
+        if not healthy:
+            console.print(f"[red]memory unavailable[/red] [dim]{detail}[/dim]")
+        else:
+            console.print(f"[green]memory ready[/green] "
+                          f"[dim]backend: {store.name}[/dim]")
+        # Only a store that owns its rows can count them; asking anything else
+        # would be another round trip for a number `alan backends` reports.
+        stats = getattr(store, "stats", None)
+        if callable(stats):
+            data = stats()
+            console.print(f"[dim]{data.get('total', 0)} items, "
+                          f"{data.get('sessions', 0)} sessions[/dim]")
+        recent = getattr(store, "recent", None)
+        if callable(recent) and alan.session_id:
+            items = recent(session_id=alan.session_id, limit=10)
+            if items:
+                console.print("[dim]this session:[/dim]")
+                for item in items:
+                    console.print(f"  [dim]{item.content.strip()[:100]}[/dim]")
+    elif user == "/forget":
+        # The whole store is `alan forget --all --yes`. In a live conversation
+        # the honest reading of "forget" is the one thing that conversation
+        # owns: an unconfirmed wipe of every durable fact must not be one
+        # keystroke away.
+        forget_session = getattr(store, "forget_session", None)
+        if callable(forget_session) and alan.session_id:
+            removed = forget_session(alan.session_id)
+            console.print(f"[dim]cleared {removed} item(s) from this session[/dim]")
+            console.print(
+                "[dim]use 'alan forget --all --yes' to clear everything[/dim]"
+            )
+        else:
+            ok = store.forget(everything=True)
+            console.print("[dim]memory cleared[/dim]" if ok
+                          else "[red]forget failed[/red]")
+    return True
+
+
 def _everything(provider) -> list:
     """Every stored item, whatever the query.
 
     `search` cannot be used for this: it is relevance-ranked and gated, so it
-    would omit exactly the items a cleanup needs to see. Backends keep their
-    own index, so this reads the ones Alan ships and returns nothing for a
-    backend that does not expose one -- better to report "cannot list" than to
-    silently delete the wrong thing.
+    would omit exactly the items a cleanup needs to see.
+
+    A backend that implements `items()` is asked directly. The two fallbacks
+    below reach into internals that only two providers still expose, and they
+    are the reason this function exists in this shape: when the default
+    backend became the SQLite store, `forget --list` reported an empty memory
+    and `--contains` matched nothing, because neither `_index` nor `_load` is
+    a method that store has. Everything looked fine -- `ingest` reported
+    "stored in memory" -- while removal had quietly stopped working. An
+    unsupported listing must fail visibly, never silently.
     """
     from .interfaces.types import MemoryItem, MemoryLevel
 
     records: list = []
 
-    index = getattr(provider, "_index", None)
-    if isinstance(index, dict):
-        # cognee: fingerprint -> serialised MemoryItem
-        records = list(index.values())
-    else:
-        loader = getattr(provider, "_load", None)
-        if callable(loader):
-            for level in MemoryLevel:
-                try:
-                    records.extend(loader(level))
-                except Exception:  # noqa: BLE001
-                    continue
+    # The supported path: a backend that can enumerate its own rows does so.
+    enumerated = getattr(provider, "items", None)
+    if callable(enumerated):
+        try:
+            listed = list(enumerated())
+        except Exception:  # noqa: BLE001
+            listed = []
+        if listed:
+            records = listed
+
+    if not records:
+        index = getattr(provider, "_index", None)
+        if isinstance(index, dict):
+            # cognee: fingerprint -> serialised MemoryItem
+            records = list(index.values())
+        else:
+            loader = getattr(provider, "_load", None)
+            if callable(loader):
+                for level in MemoryLevel:
+                    try:
+                        records.extend(loader(level))
+                    except Exception:  # noqa: BLE001
+                        continue
 
     items: list = []
     for record in records:
@@ -860,41 +1032,7 @@ def chat(
                 )
             continue
 
-        if user.split(" ", 1)[0] in ("/remember", "/recall", "/memory", "/forget"):
-            if alan.memory is None:
-                console.print("[yellow]memory is disabled in config/settings.toml[/yellow]")
-                continue
-            if user.startswith("/remember"):
-                text = user[len("/remember") :].strip()
-                if not text:
-                    console.print("[yellow]usage: /remember TEXT[/yellow]")
-                else:
-                    with console.status("[dim]indexing memory...[/dim]"):
-                        ok = alan.memory.remember(text, background=False)
-                    console.print(
-                        "[green]stored[/green]" if ok else "[red]could not store memory[/red]"
-                    )
-            elif user.startswith("/recall"):
-                hits = alan.memory.recall(user[len("/recall") :].strip())
-                if not hits:
-                    console.print("[yellow]no memories matched[/yellow]")
-                for hit in hits:
-                    console.print(Panel(hit, border_style="dim"))
-            elif user == "/memory":
-                health = alan.memory.health()
-                if health is None:
-                    console.print("[red]memory sidecar unreachable[/red]")
-                else:
-                    names = ", ".join(
-                        str(d.get("name")) for d in alan.memory.datasets()
-                    ) or "none"
-                    console.print(
-                        f"[green]memory ready[/green] "
-                        f"[dim](dataset: {alan.memory.dataset}; datasets: {names})[/dim]"
-                    )
-            elif user == "/forget":
-                ok = alan.memory.forget(memory_only=True)
-                console.print("[dim]memory cleared[/dim]" if ok else "[red]forget failed[/red]")
+        if _memory_slash(alan, user):
             continue
 
         try:
