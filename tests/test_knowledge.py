@@ -9,6 +9,7 @@ asserted rather than hoped for.
 
 from __future__ import annotations
 
+import math
 import tempfile
 import unittest
 from pathlib import Path
@@ -25,6 +26,7 @@ from alan.knowledge import (
 )
 from alan.knowledge.embeddings import OllamaEmbedder, _has_model
 from alan.knowledge.loaders import detect_kind, is_indexable, walk
+from alan.knowledge.retrieve import _SEMANTIC_HIGH, _is_relevant
 from alan.knowledge.store import fts_query
 
 
@@ -53,6 +55,45 @@ class FakeEmbedder:
             for index, words in enumerate(self.GROUPS):
                 vector[index] = float(sum(lowered.count(word) for word in words))
             out.append(vector)
+        return out
+
+
+class NoisyEmbedder:
+    """Reproduces the cosine profile nomic-embed-text actually gives a corpus.
+
+    ``FakeEmbedder`` is orthogonal, so unrelated text scores 0.0 -- which is
+    exactly what a cosine floor is good at rejecting, and therefore cannot
+    express the bug the relevance gate exists for. Real embeddings score
+    *unrelated* English 0.38-0.54, well clear of any floor that would still
+    let a genuine match through, so a floor alone cannot be the gate.
+
+    Here unmarked text -- a query -- is the reference direction, and its
+    cosine to a passage is simply that passage's level:
+
+    ``quiet``   ~0.38   unrelated; clears the floor, misses the high bar
+    ``signal``  ~0.60   a genuine match, clear of the high bar
+    ``spike``   ~0.72   an obvious match
+
+    Those are the bands measured against nomic-embed-text: unrelated text
+    0.379-0.466 on 8 documents and up to 0.541 at 500, genuine matches from
+    0.567. Which of them is admitted then follows from the *lexical* evidence,
+    and these levels sit either side of the bar that decides.
+    """
+
+    name = "noisy"
+    LEVELS = {"quiet": 0.38, "signal": 0.60, "spike": 0.72}
+
+    def available(self) -> tuple[bool, str]:
+        return True, "noisy embedder"
+
+    def embed(self, texts):
+        out = []
+        for text in texts:
+            level = next(
+                (value for marker, value in self.LEVELS.items() if marker in text),
+                1.0,  # unmarked text is a query: the reference direction
+            )
+            out.append([level, math.sqrt(1.0 - level * level)])
         return out
 
 
@@ -274,6 +315,110 @@ class RetrievalTests(TempWorkspace):
         store = self.store()
         self.assertEqual(search(store, "   ", embedder=NullEmbedder()), [])
 
+    def test_a_nonsense_query_returns_nothing_not_the_whole_store(self) -> None:
+        """The gate's reason to exist.
+
+        No word of the query is in the store, so no passage may stand in as
+        the answer on cosine alone -- least of all one scoring 0.38, which
+        clears a floor comfortably and is exactly what a floor-only gate used
+        to let through.
+        """
+        store = self.store()
+        for index in range(4):
+            path = self.write(
+                f"quiet{index}.md",
+                f"# Quiet {index}\n\nThe quiet level here, note {index}.\n",
+            )
+            ingest_paths(store, [str(path)], embedder=NoisyEmbedder())
+
+        self.assertFalse(
+            store.search_lexical("zzz nonexistent qqq"),
+            "test premise: the query must match no word at all",
+        )
+        self.assertEqual(search(store, "zzz nonexistent qqq", embedder=NoisyEmbedder()), [])
+
+    def test_a_genuine_match_still_surfaces_without_a_shared_word(self) -> None:
+        """Recall is the other half of the gate, and must not be the casualty."""
+        store = self.store()
+        for index in range(3):
+            path = self.write(
+                f"quiet{index}.md",
+                f"# Quiet {index}\n\nThe quiet level here, note {index}.\n",
+            )
+            ingest_paths(store, [str(path)], embedder=NoisyEmbedder())
+        match = self.write(
+            "signal.md", "# Signal\n\nThe signal level applies to this note.\n"
+        )
+        ingest_paths(store, [str(match)], embedder=NoisyEmbedder())
+
+        hits = search(store, "zzz nonexistent qqq", embedder=NoisyEmbedder())
+        self.assertEqual(
+            [Path(hit.source).name for hit in hits],
+            ["signal.md"],
+            "a genuine match must clear the high bar while 0.38 noise is turned away",
+        )
+
+    def test_a_word_match_opens_the_floor_to_corroborating_passages(self) -> None:
+        """With a word match in hand, a 0.38 neighbour is useful colour, not a risk.
+
+        The query demonstrably lands in the store, so a passage that is
+        merely not-unlike it adds context rather than masquerading as an
+        answer. Only the floor applies, and 0.38 clears it.
+        """
+        store = self.store()
+        lexical = self.write(
+            "lexical.md", "# Lexical\n\nThe webhook fired twice at noon today.\n"
+        )
+        colour = self.write("colour.md", "# Colour\n\nThe quiet level here.\n")
+        ingest_paths(store, [str(lexical), str(colour)], embedder=NoisyEmbedder())
+
+        hits = search(store, "webhook", embedder=NoisyEmbedder())
+        sources = [Path(hit.source).name for hit in hits]
+        self.assertIn("lexical.md", sources)
+        self.assertIn(
+            "colour.md",
+            sources,
+            "0.38 clears the floor, and a word match is what makes the floor the bar",
+        )
+
+    def test_an_rrf_tie_is_broken_by_cosine_not_by_filename(self) -> None:
+        """Two passages can fuse to an identical RRF score; the filename must not decide.
+
+        RRF is magnitude-blind by design -- it keeps a ranker's rank and
+        discards its scores. That costs something when a lexical match is
+        worthless but still a rank: measured against the real store, the query
+        "how much does the paid plan cost" matched launch.md on the stopword
+        "the" for a bm25 of ~1e-06, fused both passages to 0.0325, and
+        alphabetical order then put launch.md above the actual answer. The
+        second ranker already holds the evidence the tie needs, so it breaks it.
+        """
+        store = self.store()
+        # Both passages share "webhook" and "fired" with the query, so both
+        # take the lexical path and fuse to an identical score. Only the
+        # marker word differs, and it is what sets each passage's cosine.
+        noise = self.write(
+            "aaa_noise.md", "# Aaa\n\nThe quiet webhook fired at noon today.\n"
+        )
+        answer = self.write(
+            "zzz_answer.md", "# Zzz\n\nThe signal webhook fired at noon today.\n"
+        )
+        ingest_paths(store, [str(noise), str(answer)], embedder=NoisyEmbedder())
+
+        # Both passages share "webhook" with the query, so both take the
+        # lexical path; the cosine decides between them. Without the fix this
+        # returned aaa_noise.md first, on alphabetical order.
+        hits = search(store, "webhook fired", embedder=NoisyEmbedder())
+        self.assertEqual(
+            [Path(hit.source).name for hit in hits][0],
+            "zzz_answer.md",
+            "an RRF tie must be broken by the cosine, not by the filename",
+        )
+        self.assertEqual(hits[0].score, hits[1].score, "test premise: a genuine tie")
+        self.assertGreater(
+            hits[0].cosine,
+            hits[1].cosine,
+            "test premise: the winner is the passage the embedder preferred",
+        )
 
 class EmbedderTests(unittest.TestCase):
     def test_null_embedder_is_unavailable_but_safe(self) -> None:

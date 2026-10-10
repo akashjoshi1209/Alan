@@ -690,8 +690,18 @@ class Orchestrator(AgentRuntime):
         if not isinstance(report, str) or not report.strip():
             return json.dumps(output, default=str)
 
-        verified = output.get("verified") or []
-        not_done = output.get("not_done") or []
+        # The verdict is about files a delegation may have changed, so it is
+        # keyed on a delegation's own fields rather than on "a report exists".
+        # Every other report-shaped tool -- knowledge search, ingest, list --
+        # returns `report` alone, and stamping "Vibecoder may have only
+        # claimed" over a block of cited passages tells the model its own
+        # citations are unverified (seen live: `alan run "search my notes"`
+        # answered by describing the evidence as a claim it could not trust).
+        verified = output.get("verified")
+        not_done = output.get("not_done")
+        if not isinstance(verified, list) and not isinstance(not_done, list):
+            return report.strip()
+
         if verified:
             names = ", ".join(str(v.get("path")) for v in verified)
             verdict = (
@@ -773,7 +783,23 @@ class Orchestrator(AgentRuntime):
             parts.append(recalled)
         if observations:
             parts.append("Findings from this request:\n" + "\n".join(observations))
-        parts.append(self.registry.catalog(_allowed_for(plan)))
+        # Shown as context, never as a menu. The steps have already run by the
+        # time this prompt is built, and nothing on the answer path can execute
+        # a tool -- `router.complete` carries no tool plumbing at all -- so a
+        # list headed "Available tools:" reads as an invitation. Seen live:
+        # `alan run "index this folder"` finished by emitting a raw
+        # `to=knowledge.ingest` call as its reply, leaving the user to read
+        # tool syntax as prose. The same catalogue, headed as a capability that
+        # is already spent, still tells the model what was in scope without
+        # offering it a call to make.
+        catalogue = self.registry.catalog(_allowed_for(plan))
+        if catalogue:
+            parts.append(
+                "Capabilities in scope for this request (informational only: "
+                "the steps already ran and no tool can be called from this "
+                "message, so reply in plain prose):\n"
+                + catalogue.removeprefix("Available tools:")
+            )
         return "\n\n".join(p for p in parts if p)
 
     def _memory_decision(

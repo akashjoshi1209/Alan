@@ -1764,6 +1764,80 @@ class TestOrchestrator(TempStoreMixin):
         self.assertNotIn("'", out, "a Python repr is unreadable as a prompt")
         self.assertIn('"acted"', out)
 
+    def test_a_plain_report_carries_no_delegation_verdict(self) -> None:
+        """A report is not a claim about files, so it gets no file-change verdict.
+
+        The verdict is keyed on a delegation's own fields (`verified`,
+        `not_done`), not on the mere presence of `report`. Keying it the other
+        way stamped "Vibecoder may have only claimed" over knowledge-search
+        citations -- telling the model its own findings were unverified and
+        naming an internal component in a run that never touched it.
+        """
+        from alan.core.orchestrator import Orchestrator
+
+        rendered = Orchestrator._render(
+            {"report": "[notes.md:4] Pricing tier is $29.", "count": 1}
+        )
+        self.assertEqual(rendered, "[notes.md:4] Pricing tier is $29.")
+        self.assertNotIn("Vibecoder", rendered)
+        self.assertNotIn("NO FILE CHANGE", rendered)
+
+    def test_a_delegation_report_with_neither_field_still_gets_the_verdict(self) -> None:
+        from alan.core.orchestrator import Orchestrator
+
+        rendered = Orchestrator._render(
+            {"verified": [], "not_done": [], "report": "DONE (claimed):"}
+        )
+        self.assertTrue(rendered.startswith("NO FILE CHANGE WAS CONFIRMED"))
+        self.assertIn("DONE (claimed)", rendered)
+
+    def test_the_answer_prompt_offers_no_tools_to_call(self) -> None:
+        """The answer path has no tool plumbing, so the prompt must not offer one.
+
+        The catalogue was headed "Available tools:" on the *answer* prompt --
+        after every step had already run, with `router.complete` able to take
+        no tools at all. A tool-shaped list beside that wording invites the
+        call: observed live, `alan run "index this folder"` replied with a raw
+        `to=knowledge.ingest` block, which the user reads as prose. The same
+        capabilities, headed as spent scope, still inform without inviting.
+        """
+        from alan.knowledge import KnowledgeStore, NullEmbedder
+        from alan.tools.knowledge import KnowledgeTools
+
+        registry = ToolRegistry(default_gate(RiskLevel.MEDIUM_RISK))
+        knowledge = KnowledgeStore(self.root / "prompt.db")
+        try:
+            registry.register_provider(KnowledgeTools(knowledge, NullEmbedder()))
+            orchestrator = _orchestrator(memory=self.store, registry=registry)
+
+            # The two knowledge plans: their tools are registered, so a
+            # catalogue exists to be misread as an invitation.
+            for plan, needle in (
+                (HeuristicPlanner().plan("search my notes for pricing"),
+                 "knowledge.search"),
+                # Ingest needs a literal path, not just a folder name.
+                (HeuristicPlanner().plan("index D:/notes"), "knowledge.ingest"),
+            ):
+                prompt = orchestrator._system_prompt(plan, "", ["[step] done"], "")
+                self.assertNotIn("Available tools:", prompt, plan.intent)
+                self.assertIn("no tool can be called", prompt, plan.intent)
+                self.assertIn(needle, prompt, "the capability must still be named")
+
+            # Research's web tool is not in this registry, so there is no
+            # catalogue to offer -- but the heading must never come back.
+            research = orchestrator._system_prompt(
+                HeuristicPlanner().plan("search the web for local AI"),
+                "",
+                ["[step] done"],
+                "",
+            )
+            self.assertNotIn("Available tools:", research)
+        finally:
+            # Closed here, not by addCleanup: the mixin tears its temp dir
+            # down first, and Windows refuses to delete a directory whose
+            # SQLite handle is still open.
+            knowledge.close()
+
     def test_a_non_dict_tool_result_is_passed_through(self) -> None:
         from alan.core.orchestrator import Orchestrator
 
