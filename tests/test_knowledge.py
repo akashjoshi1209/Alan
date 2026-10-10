@@ -26,7 +26,7 @@ from alan.knowledge import (
 )
 from alan.knowledge.embeddings import OllamaEmbedder, _has_model
 from alan.knowledge.loaders import detect_kind, is_indexable, walk
-from alan.knowledge.retrieve import _SEMANTIC_HIGH, _is_relevant
+from alan.knowledge.retrieve import _SEMANTIC_FLOOR, _SEMANTIC_HIGH, _is_relevant
 from alan.knowledge.store import fts_query
 
 
@@ -419,6 +419,75 @@ class RetrievalTests(TempWorkspace):
             hits[1].cosine,
             "test premise: the winner is the passage the embedder preferred",
         )
+
+    def test_a_one_topic_store_still_answers_when_everything_matches(self) -> None:
+        """The case a *relative* test cannot serve, and so the reason HIGH exists.
+
+        When every passage is about the same thing, a query's cosine to all of
+        them is near-identical, so "spikes above its own corpus" is ~0 by
+        construction -- a margin gate would reject the very store it was meant
+        to protect. An absolute bar is the only thing that can admit them, and
+        it does, because genuine matches measure 0.567 and up. Measured here:
+        all five passages sit at 0.72 against a corpus mean of 0.72, a margin
+        of exactly zero.
+        """
+        store = self.store()
+        paths = [
+            self.write(f"same{i}.md", f"# Same {i}\n\nThe spike applies to note {i}.\n")
+            for i in range(5)
+        ]
+        ingest_paths(store, [str(p) for p in paths], embedder=NoisyEmbedder())
+
+        self.assertFalse(
+            store.search_lexical("zzz nonexistent qqq"),
+            "test premise: the query must match no word at all",
+        )
+        hits = search(store, "zzz nonexistent qqq", embedder=NoisyEmbedder(), top_k=5)
+        self.assertEqual(
+            len(hits), 5, "every passage genuinely matches, so all five must surface"
+        )
+
+
+class RelevanceGateTests(unittest.TestCase):
+    """The gate's two bars, pinned against the measurements that set them.
+
+    nomic-embed-text, on corpora of 100-1000 passages drawn from mixed
+    vocabulary: unrelated text reaches cosine 0.541, genuine matches start at
+    0.567. The bands overlap, so neither bar is a claim about accuracy. What
+    they encode is which failure is cheaper. Retrieval feeds an LLM that
+    answers in prose, so a passage admitted on weak evidence becomes a
+    confident non-answer the reader cannot see through, while a passage turned
+    away is an empty result that invites a rephrase. The bar errs toward the
+    cheap failure.
+    """
+
+    def test_a_hit_carrying_the_answer_alone_must_clear_the_high_bar(self) -> None:
+        # Measured unrelated: 0.379-0.466 on 8 documents, up to 0.541 at 500.
+        self.assertFalse(_is_relevant(0.541, corroborating=False))
+        self.assertFalse(_is_relevant(0.466, corroborating=False))
+        # Measured related: 0.567-0.821.
+        self.assertTrue(_is_relevant(0.567, corroborating=False))
+        self.assertTrue(_is_relevant(0.821, corroborating=False))
+
+    def test_a_hit_corroborating_a_word_match_only_clears_the_floor(self) -> None:
+        # 0.466 sits above the floor and below the high bar -- precisely the
+        # value a word match rescues and a sole-evidence claim rejects.
+        self.assertTrue(_is_relevant(0.466, corroborating=True))
+        self.assertTrue(_is_relevant(_SEMANTIC_FLOOR, corroborating=True))
+        self.assertFalse(_is_relevant(0.299, corroborating=True))
+
+    def test_one_cosine_gets_two_verdicts_because_the_cosine_is_not_what_changed(
+        self,
+    ) -> None:
+        self.assertTrue(_is_relevant(0.54, corroborating=True))
+        self.assertFalse(_is_relevant(0.54, corroborating=False))
+
+    def test_the_high_bar_learns_nothing_below_the_measured_noise_ceiling(self) -> None:
+        # Step one of this fix was choosing where HIGH sits. 0.541 is the
+        # highest cosine unrelated text reached at 500-1000 documents, so the
+        # bar may not be lowered beneath it without a fresh measurement.
+        self.assertGreater(_SEMANTIC_HIGH, 0.541)
+
 
 class EmbedderTests(unittest.TestCase):
     def test_null_embedder_is_unavailable_but_safe(self) -> None:
