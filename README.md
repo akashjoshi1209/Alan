@@ -11,11 +11,11 @@
 ![License](https://img.shields.io/badge/license-MIT-1B9AAA?style=flat-square)
 
 ```
-        _
-       / \    _      _  __ _ _ __
-      / _ \  | |    / \/ _` | '_ \
-     / ___ \ | |___| | (_| | | | |
-    /_/   \_\|_____|_|\__,_|_| |_|
+        _      _          __      __     _
+       / \    | |        /  \    |   \  | |
+      / _ \   | |       /  _ \   |    \ | |
+     / ___ \  | |___   / ____ \  |  |\ \| |
+    /_/   \_\ |_____| /_/    \_\ |__| \___|
 ```
 
 **Contents** — [What Alan is](#what-alan-is) · [Why it's different](#why-alan-is-different) · [Quick start](#quick-start) · [Commands](#the-commands) · [Brain](#choosing-a-brain) · [Memory](#memory) · [Failures](#learning-from-failure) · [Always-on](#always-on-scheduling) · [Browsing](#browsing) · [Coding](#coding) · [Skills](#skills-ecc) · [Layout](#layout) · [Anywhere](#location-independence) · [Performance](#performance) · [Troubleshooting](#troubleshooting)
