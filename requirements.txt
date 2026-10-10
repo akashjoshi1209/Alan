@@ -43,6 +43,11 @@ typing_extensions==4.16.0
 # -- command line ------------------------------------------------------------
 typer==0.27.2
 rich==15.0.0
+# pyreadline3 gives `alan chat` real line editing on Windows: up/down history
+# (persisted under data\) and Tab completion of the slash commands. Optional at
+# runtime -- the chat loop falls back to plain input() when it is absent or the
+# console is not interactive (pipes, tests), so it is never load-bearing.
+pyreadline3==3.5.6
 
 # -- optional: alternative memory backend ------------------------------------
 # Behind MemoryProvider. Selected with [memory] backend = "mem0". Points at the

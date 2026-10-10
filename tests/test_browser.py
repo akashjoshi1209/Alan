@@ -439,9 +439,13 @@ class DoctorSurfaceTest(unittest.TestCase):
         cli_source = (
             Path(__file__).resolve().parents[1] / "src" / "alan" / "cli.py"
         ).read_text(encoding="utf-8")
-        doctor_body = cli_source.split("def doctor(", 1)[1].split("@app.command()", 1)[0]
+        # The status-to-row mapping lives in _doctor_rows and doctor() renders
+        # those rows; the guard follows the field to where it moved. The
+        # mapping binds status['internet'] to a local, so assert the field
+        # (internet['note']) actually reaches a rendered row.
+        doctor_body = cli_source.split("def _doctor_rows(", 1)[1].split("@app.command()", 1)[0]
         self.assertIn("browser", doctor_body)
-        self.assertIn("status['internet']['note']", doctor_body)
+        self.assertIn("internet['note']", doctor_body)
 
 
 if __name__ == "__main__":

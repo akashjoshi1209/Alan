@@ -14,6 +14,7 @@ import typer
 from rich.console import Console
 
 from . import __version__
+from . import theme
 from .assistant import Alan, session_path
 from .chatfeed import ChatFeed
 from .config import (
@@ -58,11 +59,13 @@ console = Console()
 #: ``Table`` and ``Panel`` are cheap on their own but are grouped here so the
 #: whole rendering layer loads through one door rather than being split between an
 #: eager import and a lazy one.
+#: ``Live`` is the streaming reply renderer -- only chat and ask use it.
 #: Module and attribute name for each deferred Rich renderer.
 _LAZY_RICH = {
     "Markdown": ("rich.markdown", "Markdown"),
     "Panel": ("rich.panel", "Panel"),
     "Table": ("rich.table", "Table"),
+    "Live": ("rich.live", "Live"),
 }
 
 
@@ -116,16 +119,217 @@ class _LazyRenderer:
 Markdown = _LazyRenderer("Markdown")
 Panel = _LazyRenderer("Panel")
 Table = _LazyRenderer("Table")
+Live = _LazyRenderer("Live")
 
 
-def _print_banner() -> None:
+def _capability_line(settings) -> str:
+    """What this install switched on, read from settings alone.
+
+    Settings, not probes: the banner must never wait on a sidecar to draw.
+    Anything unreachable still shows itself later, in `alan doctor`.
+    """
+    flags = [
+        ("memory", getattr(settings.memory, "enabled", False)),
+        ("brain", getattr(settings.knowledge, "enabled", False)),
+        ("voice", getattr(settings.voice, "enabled", False)),
+        ("ecc", getattr(settings.ecc, "enabled", False)),
+        ("scheduler", getattr(settings.scheduler, "enabled", False)),
+        (
+            "telegram",
+            bool(getattr(getattr(settings, "telegram", None), "bot_token", "")),
+        ),
+    ]
+    return "  ".join(
+        f"{name} {theme.mark('ok' if enabled else 'off')}" for name, enabled in flags
+    )
+
+
+def _print_banner(settings) -> None:
     console.print(
         Panel.fit(
-            f"[bold cyan]Alan[/bold cyan] [dim]v{__version__}[/dim]\n"
-            f"[dim]home: {HOME}[/dim]",
+            f"[bold]Alan[/bold] [dim]v{__version__}[/dim]\n"
+            f"[dim]{_capability_line(settings)}[/dim]",
             border_style="cyan",
         )
     )
+
+
+#: The chat surface's commands. One list feeds both /help and the line
+#: editor's Tab completion, so the two cannot drift apart.
+_HELP_SECTIONS = [
+    ("conversation", [
+        ("/help", "show this screen"),
+        ("/reset, /new", "clear the conversation"),
+        ("/save", "write this session to data\\sessions"),
+        ("/sessions", "list saved sessions"),
+        ("/load NAME", "load a saved session"),
+        ("/provider", "show the backend in use"),
+        ("/exit", "quit (or Ctrl+C)"),
+    ]),
+    ("memory", [
+        ("/remember TEXT", "store a memory"),
+        ("/recall QUERY", "search memory"),
+        ("/memory", "memory status"),
+        ("/forget", "clear this dataset's memory"),
+    ]),
+    ("always-on", [
+        ("/activity", "tasks, approvals, recent runs"),
+        ("/approve ID, /reject ID", "decide a pending approval"),
+        ("/telegram", "phone bridge state"),
+        ("/schedule", "list scheduled tasks"),
+        ("/schedule add TEXT", "schedule a task (say when it should run)"),
+        ("/schedule cancel TERM", "cancel task(s) by id or phrase"),
+        ("/schedule start, stop", "control the background loop"),
+        ("/schedule pause, resume, run ID", "control one task"),
+    ]),
+]
+
+
+def _completion_options() -> list:
+    """The words Tab completes in chat: each command's first token."""
+    options = {"/help"}
+    for _section, rows in _HELP_SECTIONS:
+        for command, _description in rows:
+            options.add(command.split(",")[0].split(" ")[0])
+    return sorted(options)
+
+
+def _help_table():
+    """The /help screen as a table: commands on the left, meaning on the right."""
+    table = Table(show_header=False, box=None, pad_edge=False, padding=(0, 2))
+    table.add_column("command", style=theme.ASSISTANT, no_wrap=True)
+    table.add_column("what it does")
+    for section, rows in _HELP_SECTIONS:
+        table.add_row(f"[bold]{section}[/bold]", "")
+        for command, description in rows:
+            table.add_row(command, description)
+    return table
+
+
+def _print_help() -> None:
+    console.print(_help_table())
+
+
+class _LineReader:
+    """One chat prompt line, with a real line editor when the console allows one.
+
+    On a real console, pyreadline3 draws the prompt and edits the line: up/down
+    history (persisted under ``data\\`` so it survives the session), Tab
+    completion of the slash commands, and Ctrl+C to abandon the line. Without a
+    console -- a pipe, a test, a redirected session -- it falls back to Rich's
+    plain input, which cannot edit but never fails. The chat loop reads the
+    same way either way, and neither knows which it got.
+
+    Every failure degrades to that fallback on purpose: a fancier prompt must
+    never be the reason chat will not start.
+    """
+
+    def __init__(self, history_path: Path) -> None:
+        self._history = history_path
+        self._rl = None
+        # pyreadline3 reads keystrokes straight off the Windows console; on a
+        # piped stdin that would hang waiting for keys nobody can press.
+        if not (sys.stdin.isatty() and sys.stdout.isatty()):
+            return
+        try:
+            import pyreadline3.rlmain as rlmain
+
+            rl = rlmain.Readline()
+            # pyreadline exposes set_prompt_color only inside its .pyinputrc
+            # exec context; the instance reads this attribute directly. 10 is
+            # that same table's "green" (FOREGROUND_GREEN | INTENSITY), which
+            # is what keeps the you> prompt the identity colour.
+            rl.prompt_color = 10
+            rl.parse_and_bind("tab: complete")
+            rl.set_completer(self._complete)
+            rl.set_history_length(500)
+            # One Ctrl+C abandons the line, the same as plain input(): a first
+            # tap that merely inserts a character reads as "the key is broken".
+            rl.allow_ctrl_c = False
+            try:
+                rl.read_history_file(str(history_path))
+            except (OSError, IOError):
+                pass  # no history yet -- the first session starts it
+            self._rl = rl
+        except Exception:  # noqa: BLE001 - degrade, never refuse to chat
+            self._rl = None
+
+    @property
+    def editing(self) -> bool:
+        """True when the fancy editor is active (the banner says so)."""
+        return self._rl is not None
+
+    def read(self) -> str:
+        """One stripped line. Raises KeyboardInterrupt / EOFError like input()."""
+        if self._rl is not None:
+            try:
+                return self._rl.readline("you> ").strip()
+            except (KeyboardInterrupt, EOFError):
+                raise
+            except Exception:  # noqa: BLE001 - editor broke mid-session
+                self._rl = None
+        return console.input("[bold green]you>[/bold green] ").strip()
+
+    def save(self) -> None:
+        """Persist this session's history. Best effort: losing it costs arrows,
+        not data."""
+        if self._rl is None:
+            return
+        try:
+            self._history.parent.mkdir(parents=True, exist_ok=True)
+            self._rl.write_history_file(str(self._history))
+        except Exception:  # noqa: BLE001
+            pass
+
+    @staticmethod
+    def _complete(text: str, state: int):
+        """Readline's completer protocol: matches for the word being typed."""
+        matches = [c for c in _completion_options() if c.startswith(text)]
+        return matches[state] if state < len(matches) else None
+
+
+def _draw_reply(chunks, show_time: bool = True) -> str:
+    """Render a streamed reply: a spinner until the first token, then markdown
+    that grows in place, then a dim footer with how long it took.
+
+    The spinner exists because the honest gap -- asking a model, waiting for a
+    provider -- used to print nothing at all, which reads as a hang. Once the
+    first token arrives the answer draws itself as it streams, so bold, lists
+    and code blocks look like the document they are rather than like source.
+
+    Ctrl+C during a reply cancels *the reply*, not the session: the chat loop
+    keeps the prompt. Returns everything that arrived before the end or the
+    interrupt.
+    """
+    iterator = iter(chunks)
+    text = ""
+    started = time.monotonic()
+    try:
+        with console.status(f"[dim]{theme.INFO} thinking[/dim]", spinner="dots"):
+            try:
+                first = next(iterator)
+            except StopIteration:
+                first = None
+            if first is not None:
+                text = first
+        if text:
+            with Live(
+                Markdown(text),
+                console=console,
+                refresh_per_second=10,
+                vertical_overflow="visible",
+            ) as live:
+                for chunk in iterator:
+                    text += chunk
+                    live.update(Markdown(text))
+    except KeyboardInterrupt:
+        console.print(f"\n[dim]{theme.OFF} cancelled[/dim]")
+        return text
+    if not text:
+        console.print(f"[dim]{theme.INFO} no reply[/dim]")
+    elif show_time:
+        console.print(f"[dim]{theme.elapsed(time.monotonic() - started)}[/dim]")
+    return text
 
 
 @app.command()
@@ -395,9 +599,7 @@ def _one_shot(text: str, use_stream: bool) -> None:
 
     if use_stream:
         try:
-            for chunk in alan.stream(text, remember=False):
-                console.print(chunk, end="", soft_wrap=True, markup=False)
-            console.print()
+            _draw_reply(alan.stream(text, remember=False))
         except ProviderError as exc:
             console.print(f"[red]{exc}[/red]")
             raise typer.Exit(code=1)
@@ -508,9 +710,14 @@ def chat(
     if system:
         alan.system_prompt = system
 
-    _print_banner()
-    console.print(f"[dim]provider: {alan.provider.describe()}[/dim]")
-    console.print("[dim]Type /help for commands, /exit to quit.[/dim]\n")
+    _print_banner(load_settings())
+    console.print(f"[dim]{alan.provider.describe()}[/dim]")
+    reader = _LineReader(DATA_DIR / "chat_history.txt")
+    console.print(
+        "[dim]/help commands · /exit quit"
+        + (" · ↑↓ history · tab completes" if reader.editing else "")
+        + "[/dim]\n"
+    )
 
     # A chat session owns the background scheduler: this is the only surface
     # that is long-lived enough for it to mean anything.
@@ -530,7 +737,7 @@ def chat(
         for line in feed.drain():
             console.print(f"[dim]{line}[/dim]")
         try:
-            user = console.input("[bold green]you>[/bold green] ").strip()
+            user = reader.read()
         except (EOFError, KeyboardInterrupt):
             console.print()
             break
@@ -539,23 +746,7 @@ def chat(
         if user in ("/exit", "/quit", ":q"):
             break
         if user == "/help":
-            console.print(
-                "[bold]conversation[/bold]\n"
-                "/reset or /new  clear conversation    /save  write session to data/sessions\n"
-                "/sessions  list saved sessions        /load NAME  load a saved session\n"
-                "/provider  show backend               /exit  quit\n"
-                "[bold]memory[/bold]\n"
-                "/remember TEXT  store a memory        /recall QUERY  search memory\n"
-                "/memory  memory status                /forget  erase this dataset's memory\n"
-                "[bold]always-on[/bold]\n"
-                "/activity  tasks, approvals, recent runs      /approve ID | /reject ID\n"
-                "/telegram  phone bridge state                          /schedule  list tasks\n"
-                "/schedule add TEXT      schedule a task (include the when)\n"
-                "/schedule cancel TERM   cancel task(s) by id or phrase\n"
-                "/schedule start|stop    start/stop the background loop\n"
-                "/schedule pause|resume|run ID   control one task\n"
-                "e.g. /schedule add check the news every morning"
-            )
+            _print_help()
             continue
         if user in ("/reset", "/new"):
             alan.reset()
@@ -630,8 +821,7 @@ def chat(
                     console.print("[yellow]usage: /schedule add TEXT[/yellow]")
                 else:
                     try:
-                        console.print("[bold cyan]alan>[/bold cyan] ", end="")
-                        console.print(alan.ask(request))
+                        _draw_reply(alan.stream(request))
                     except Exception as exc:  # the chat loop must survive an ask
                         console.print(f"\n[red]error: {type(exc).__name__}: {exc}[/red]\n")
             elif rest.split(" ", 1)[0] == "cancel" and " " in rest:
@@ -699,16 +889,14 @@ def chat(
                 console.print("[dim]memory cleared[/dim]" if ok else "[red]forget failed[/red]")
             continue
 
-        console.print("[bold cyan]alan>[/bold cyan] ", end="")
         try:
-            for chunk in alan.stream(user):
-                console.print(chunk, end="", soft_wrap=True, markup=False)
-            console.print("\n")
+            _draw_reply(alan.stream(user))
         except ProviderError as exc:
             console.print(f"\n[red]{exc}[/red]\n")
         except Exception as exc:  # one bad tool/model call must not end the chat
             console.print(f"\n[red]error: {type(exc).__name__}: {exc}[/red]\n")
 
+    reader.save()
     alan.stop_scheduler()
     alan.stop_telegram()
     feed.close()
@@ -916,6 +1104,140 @@ def trace(
     console.print(table)
 
 
+def _looks_down(note: str) -> bool:
+    """True when a status note says the thing is not working right now.
+
+    The status dict is mostly prose, so the icon needs to read it. These are
+    Alan's own words (the notes are written here, in this codebase), not a
+    user's -- and the worst a miss can do is draw a wrong glyph in a
+    diagnostic, which the note next to it still explains in full.
+    """
+    lowered = (note or "").lower()
+    return any(
+        token in lowered
+        for token in ("unreachable", "not reachable", "not running", "failed")
+    )
+
+
+def _memory_state(memory: dict) -> str:
+    """The memory row's mark: ready, degraded, switched off, or broken."""
+    note = (memory.get("note") or "").lower()
+    if "disabled" in note or not memory.get("backend"):
+        return "off" if "disabled" in note else "err"
+    if _looks_down(note):
+        return "err"
+    if memory["backend"] == "json":
+        # Working, but the dumb local fallback: everything else was asked for
+        # and nothing answered.
+        return "warn"
+    return "ok"
+
+
+def _doctor_rows(status: dict) -> list:
+    """(part, state, note) per row: Alan's status dict, mapped to what a human
+    sees. Split out so the mapping is one readable function, not markup
+    tangled through a print."""
+    memory = status["memory"]
+    browser = status["browser"]
+    internet = status["internet"]
+    voice = status["voice"]
+    knowledge = status["knowledge"]
+    telegram = status["telegram"]
+    models_ready = any(model["available"] for model in status["models"])
+    scheduler = status["scheduler"]
+    if scheduler["enabled"]:
+        # A running loop is green. Enabled-but-stopped only earns a triangle
+        # when there are tasks it is actually missing; with nothing scheduled,
+        # "not running" is a fact, not a problem.
+        sched_state = (
+            "ok" if scheduler["running"]
+            else "warn" if scheduler.get("tasks", 0)
+            else "info"
+        )
+        sched_note = (
+            f"{scheduler.get('tasks', 0)} task(s), "
+            f"{scheduler.get('waiting', 0)} waiting, "
+            f"{scheduler.get('due', 0)} due"
+        )
+        if scheduler.get("note"):
+            sched_note = f"{sched_note} - {scheduler['note']}"
+    else:
+        sched_state = "off"
+        sched_note = scheduler.get("note") or "disabled in settings"
+    pending = status["pending_approvals"]
+    return [
+        ("models", "ok" if models_ready else "err", status["model_note"]),
+        (
+            "memory",
+            _memory_state(memory),
+            f"{memory['backend'] or 'none'} - {memory['note']}",
+        ),
+        (
+            "brain",
+            # Enabled is not the same as working: an unreachable embedder is
+            # a red mark even though the feature is switched on.
+            (
+                "err"
+                if _looks_down(str(knowledge["note"]))
+                else "ok" if knowledge["enabled"] else "off"
+            ),
+            str(knowledge["note"]),
+        ),
+        (
+            "browser",
+            "err"
+            if browser["provider"] is None or _looks_down(browser["note"])
+            else "ok",
+            f"{browser['provider'] or 'none'} - {browser['note']}",
+        ),
+        (
+            "internet",
+            "err"
+            if internet["provider"] is None or _looks_down(internet["note"])
+            else "ok",
+            f"{internet['provider'] or 'none'} - {internet['note']}",
+        ),
+        (
+            "vibecoder",
+            "err" if status["vibecoder"] == "not registered" else "ok",
+            status["vibecoder"],
+        ),
+        ("ecc", "err" if status["ecc"] == "not registered" else "ok", status["ecc"]),
+        (
+            "voice",
+            {"ready": "ok", "configured": "warn", "off": "off"}.get(
+                voice["state"], "err"
+            ),
+            voice["note"],
+        ),
+        (
+            "telegram",
+            (
+                "off"
+                if not telegram["enabled"]
+                else "ok"
+                if telegram["running"]
+                else "warn"
+            ),
+            (
+                f"chat {telegram['chat_id']} - {telegram['note']}"
+                if telegram["enabled"]
+                else telegram["note"]
+            ),
+        ),
+        ("scheduler", sched_state, sched_note),
+        (
+            "approvals",
+            "warn" if pending else "info",
+            f"{pending} waiting on you" if pending else "nothing waiting",
+        ),
+        ("tools", "info", f"{len(status['tools'])} registered"),
+        ("agents", "info", ", ".join(status["agents"])),
+        ("ceiling", "info", status["risk_ceiling"]),
+        ("traces", "info", status["trace_file"] or "in memory only"),
+    ]
+
+
 @app.command()
 def doctor() -> None:
     """Report on every part of Alan: models, memory, tools, agents, limits."""
@@ -928,20 +1250,15 @@ def doctor() -> None:
     runtime = _runtime()
     try:
         status = runtime.status()
-        console.print(Panel.fit(
-            f"[bold cyan]Alan[/bold cyan] [dim]doctor[/dim]\n"
-            f"models:   {status['model_note']}\n"
-            f"memory:   {status['memory']['backend'] or 'none'} - {status['memory']['note']}\n"
-            f"browser:  {status['browser']['provider'] or 'none'} - {status['browser']['note']}\n"
-            f"internet: {status['internet']['provider'] or 'none'} - {status['internet']['note']}\n"
-            f"vibecoder: {status['vibecoder']}\n"
-            f"ecc:      {status['ecc']}\n"
-            f"voice:    {status['voice']['state']} - {status['voice']['note']}\n"
-            f"telegram: {status['telegram']['chat_id'] or 'none'} - {status['telegram']['note']}\n"
-            f"tools:    {len(status['tools'])} registered\n"
-            f"agents:   {', '.join(status['agents'])}\n"
-            f"ceiling:  {status['risk_ceiling']}\n"
-            f"traces:   {status['trace_file'] or 'in memory only'}",
+        rows = Table(show_header=False, box=None, pad_edge=False, padding=(0, 2))
+        rows.add_column("state", justify="center", no_wrap=True)
+        rows.add_column("part", style="bold", no_wrap=True)
+        rows.add_column("note")
+        for part, state, note in _doctor_rows(status):
+            rows.add_row(theme.mark(state), part, note)
+        console.print(Panel(
+            rows,
+            title="[bold]Alan[/bold] [dim]doctor[/dim]",
             border_style="cyan",
         ))
         table = Table(title="models")

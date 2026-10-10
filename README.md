@@ -85,21 +85,26 @@ alan --help              everything else
 knowing:
 
 ```text
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ Alan doctor                                                                 │
-│ models:   2 backend(s): groq:qwen/qwen3.8-27b, ollama:qwen2.5:1.5b          │
-│ internet: internet - internet ready (Exa search + Jina Reader)              │
-│ vibecoder: C:\Users\ADMIN\AppData\Roaming\npm\vibecoder.CMD                 │
-│ voice:    ready - ready on http://127.0.0.1:8181/ready (whisper small.pt,   │
-│ protocol v1); client installed                                              │
-│ tools:    33 registered                                                     │
-│ agents:   orchestrator, browser, coding, memory, planner, research,         │
-│           reviewer, system                                                  │
-└─────────────────────────────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────────────────┐
+│ Alan doctor                                                               │
+│ ✔    models       1 backend(s): groq:qwen/qwen3.8-27b                     │
+│ ✖    memory       json - cognee unavailable (cognee sidecar not           │
+│                   reachable at http://127.0.0.1:8012); start it with      │
+│                   scripts\cognee-serve.ps1                                │
+│ ✔    internet     internet - internet ready (Exa search + Jina Reader)    │
+│ ✔    voice        ready on http://127.0.0.1:8181/ready (whisper           │
+│                   small.pt, protocol v1); client installed                │
+│ ○    telegram     not configured (set bot_token and chat_id in            │
+│                   settings.toml)                                          │
+│ •    tools        33 registered                                           │
+│ •    agents       orchestrator, browser, coding, memory, planner,         │
+│                   research, reviewer, system                              │
+└───────────────────────────────────────────────────────────────────────────┘
 ```
 
-*(real output, trimmed to the interesting lines — states change as sidecars
-start and stop)*
+*(real output, trimmed to the interesting lines — every row carries a mark:
+✔ works right now · ▲ works with a caveat · ✖ broken · ○ switched off ·
+• neutral fact. The states change as sidecars start and stop)*
 
 ---
 
@@ -124,7 +129,11 @@ start and stop)*
 | `scripts\setup-whisper.ps1` | Build the speech sidecar environment (once) |
 | `scripts\pull-stt-model.ps1` | Download an STT model for the sidecar (`-List` to see installed) |
 
-Inside `alan chat`:
+Inside `alan chat` — the prompt has **up-arrow history** (kept between
+sessions), **Tab completion** of every command below, and replies **render as
+markdown while they stream** (a spinner covers the wait for the first token,
+and Ctrl+C cancels just the reply, not the session). `/help` inside chat lists
+everything:
 
 ```text
 /remember TEXT        store a note
