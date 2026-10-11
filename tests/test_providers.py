@@ -201,6 +201,22 @@ class ConfigParsingTest(unittest.TestCase):
                 self.assertTrue(default.model, "a provider with no model is useless")
                 self.assertGreaterEqual(default.priority, 0)
 
+    def test_openrouter_is_pinned_to_a_free_model(self) -> None:
+        """Alan must never call a billable OpenRouter model by accident.
+
+        The ":free" suffix on the id -- not the key -- is what selects the
+        no-charge pool, so an id without it (the old shipped default,
+        "openai/gpt-4o-mini") bills per token. Both the operator-editable
+        settings.toml and the in-code default must carry the suffix, or an
+        upgrade can silently start spending.
+        """
+        settings = load_settings()
+        self.assertTrue(
+            settings.openrouter.model.endswith(":free"),
+            f"shipped openrouter model {settings.openrouter.model!r} is not :free",
+        )
+        self.assertTrue(_provider_from_table("openrouter", {}).model.endswith(":free"))
+
 
 class KeyPresenceTest(unittest.TestCase):
     def test_missing_key_names_the_env_var_to_set(self) -> None:

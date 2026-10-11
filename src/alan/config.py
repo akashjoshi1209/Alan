@@ -148,10 +148,14 @@ _PROVIDER_DEFAULTS: dict[str, dict] = {
         "categories": ("general", "fast", "coding"),
     },
     "openrouter": {
-        "model": "openai/gpt-4o-mini",
+        # ":free" pins this to OpenRouter's no-charge pool; the old
+        # "openai/gpt-4o-mini" default billed per token. A reasoning model, so
+        # "fast" is dropped in favour of the honest "reasoning" claim. Keep
+        # this in step with [openrouter] in config/settings.toml.
+        "model": "nvidia/nemotron-3-super-120b-a12b:free",
         "base_url": "https://openrouter.ai/api/v1",
         "priority": 0,
-        "categories": ("general", "fast", "coding"),
+        "categories": ("general", "reasoning", "coding"),
     },
     "ollama": {
         "model": "qwen2.5:1.5b",

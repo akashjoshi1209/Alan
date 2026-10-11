@@ -73,11 +73,24 @@ connect_timeout = 30.0
 
 # One key reaches many models; ids are "vendor/name". Needs OPENROUTER_API_KEY.
 # Verified live: GET /models returned 200 with 464 models.
+#
+# The model MUST keep its ":free" suffix. That suffix, not the key, is what
+# pins the request to the no-charge pool -- an id without it (the old default,
+# "openai/gpt-4o-mini") bills per token. Free ids are the ones the /models
+# listing tags as "(free)"; of those, this one answered correctly and reliably
+# in live probes. Its siblings on the same provider are
+# "nvidia/nemotron-3-ultra-550b-a55b:free" (larger, 1M context) and
+# "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free" (smaller/faster).
+#
+# It is a reasoning model, so "reasoning" is stated and "fast" is not: Groq
+# still wins a tie on general/coding (same priority 0, but it precedes
+# openrouter in the registration order), and this backend is a true failover
+# plus the reasoning specialist. Verified live with this install's client.
 [openrouter]
-model = "openai/gpt-4o-mini"
+model = "nvidia/nemotron-3-super-120b-a12b:free"
 base_url = "https://openrouter.ai/api/v1"
 priority = 0
-categories = ["general", "fast", "coding"]
+categories = ["general", "reasoning", "coding"]
 
 [ollama]
 model = "qwen2.5:1.5b"
