@@ -760,6 +760,26 @@ def _confirm_on_console(request: PermissionRequest) -> bool:
     return str(answer).strip().lower() in {"y", "yes"}
 
 
+def _speak(reply: str) -> None:
+    """Speak a finished reply, if the operator asked for speech.
+
+    Deliberately after the answer is on screen and deliberately best-effort:
+    a speaker that is off, down or absent costs the sound and never the turn
+    that already succeeded. The note is printed dim so a failure is visible
+    without looking like the thing that went wrong.
+    """
+    if not reply:
+        return
+    settings = load_settings()
+    if not getattr(settings.voice, "tts_enabled", False):
+        return
+    from . import voice as voice_mod
+
+    spoken, note = voice_mod.say(settings.voice, reply)
+    if not spoken:
+        console.print(f"[dim]{note}[/dim]")
+
+
 def _one_shot(text: str, use_stream: bool) -> None:
     # Kicked off before the runtime is built so a sidecar that is down boots
     # in parallel with startup instead of being waited on: memory falls back
@@ -776,7 +796,10 @@ def _one_shot(text: str, use_stream: bool) -> None:
 
     if use_stream:
         try:
-            _draw_reply(alan.stream(text, remember=False))
+            # _draw_reply returns everything that streamed, which is exactly
+            # what speech needs -- the spoken reply and the printed one are
+            # then the same text rather than two versions that can diverge.
+            reply = _draw_reply(alan.stream(text, remember=False))
         except ProviderError as exc:
             console.print(f"[red]{exc}[/red]")
             raise typer.Exit(code=1)
@@ -785,13 +808,16 @@ def _one_shot(text: str, use_stream: bool) -> None:
             raise typer.Exit(code=1)
     else:
         try:
-            console.print(Markdown(alan.ask(text, remember=False)))
+            reply = alan.ask(text, remember=False)
+            console.print(Markdown(reply))
         except ProviderError as exc:
             console.print(f"[red]{exc}[/red]")
             raise typer.Exit(code=1)
         except Exception as exc:
             console.print(f"[red]{type(exc).__name__}: {exc}[/red]")
             raise typer.Exit(code=1)
+
+    _speak(reply)
 
 
 @app.command()
@@ -1287,6 +1313,7 @@ def _doctor_rows(status: dict) -> list:
     browser = status["browser"]
     internet = status["internet"]
     voice = status["voice"]
+    speech = status["speech"]
     knowledge = status["knowledge"]
     telegram = status["telegram"]
     models_ready = any(model["available"] for model in status["models"])
@@ -1355,6 +1382,13 @@ def _doctor_rows(status: dict) -> list:
                 voice["state"], "err"
             ),
             voice["note"],
+        ),
+        (
+            "speech",
+            {"ready": "ok", "configured": "warn", "off": "off"}.get(
+                speech["state"], "err"
+            ),
+            speech["note"],
         ),
         (
             "telegram",

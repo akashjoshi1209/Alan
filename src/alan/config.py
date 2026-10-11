@@ -364,6 +364,35 @@ class VoiceSettings:
     #: Seconds to wait for GET /ready before reporting the sidecar down.
     timeout: float = 3.0
 
+    # --- speech output: the other direction of the same channel -------------
+    # Speech-in and speech-out are separate switches rather than one, because
+    # they fail and cost differently. Hearing costs a whisper model that is
+    # already resident; speaking costs OmniVoice, which is ~2.5 GB of weights
+    # that only exist in RAM while its sidecar runs. On a 4 GB machine an
+    # operator must be able to keep the microphone and give up the voice, so
+    # neither switch implies the other.
+
+    #: Master switch for speaking answers back. Independent of ``enabled``:
+    #: it is legitimate to read every reply and still want Alan to say one.
+    tts_enabled: bool = False
+    #: Where the TTS sidecar answers. Loopback only, as above.
+    tts_base_url: str = "http://127.0.0.1:8182"
+    #: Voice design: OmniVoice's attributes for how Alan sounds, e.g.
+    #: "female, low pitch, british accent". Empty lets the model pick, which
+    #: is the sane default -- a described voice is a taste decision an
+    #: operator can make later, and an unstable one at that.
+    tts_instruct: str = ""
+    #: Seconds to wait for synthesis. Deliberately generous: this is a 2-core
+    #: CPU generating from a 613M-param diffusion model, where the first
+    #: answer of a session also pays for the model to load. Bounded at the
+    #: other end by the sidecar's own MAX_CHARS, so a runaway is capped by
+    #: input size rather than only by this deadline.
+    tts_timeout: float = 300.0
+    #: Play the audio through the default output device. Off means synthesize
+    #: only, which is what a test or a CI run wants -- a headless box has no
+    #: speaker to fail on.
+    tts_play: bool = True
+
 
 @dataclass
 class VibecoderSettings:
@@ -729,6 +758,16 @@ def _apply_tables(settings: Settings, raw: dict) -> Settings:
         v.max_seconds = max(5.0, min(float(voice.get("max_seconds", v.max_seconds)), 600.0))
         v.threshold = max(1, min(int(voice.get("threshold", v.threshold)), 32767))
         v.timeout = float(voice.get("timeout", v.timeout))
+        # Speech output. The floor of 10s on tts_timeout is not a preference:
+        # below it, a session's first answer would race the model's own load
+        # and report failure for a sidecar that was simply still starting.
+        v.tts_enabled = _as_bool(
+            voice.get("tts_enabled", v.tts_enabled), "voice.tts_enabled"
+        )
+        v.tts_base_url = str(voice.get("tts_base_url", v.tts_base_url))
+        v.tts_instruct = str(voice.get("tts_instruct", v.tts_instruct))
+        v.tts_timeout = max(10.0, min(float(voice.get("tts_timeout", v.tts_timeout)), 1800.0))
+        v.tts_play = _as_bool(voice.get("tts_play", v.tts_play), "voice.tts_play")
 
     kb = raw.get("knowledge", {})
     if kb:

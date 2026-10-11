@@ -283,6 +283,49 @@ max_seconds = 60.0
 # Peak PCM amplitude that counts as speech. Raise it in a noisy room.
 threshold = 500
 
+# Speech output: the other direction of the same channel.
+#
+# Alan hears with whisper-flow (above) and answers with OmniVoice (below) --
+# k2-fsa's 613M-param text-to-speech, run locally so a reply never leaves the
+# machine either. Separate switch from `enabled` on purpose: whisper is a
+# resident ~150 MB, OmniVoice is ~1.5-3.2 GB of weights that only exist in RAM
+# while its sidecar runs, and on a 4 GB box an operator must be able to keep
+# the microphone and give up the voice. Neither implies the other.
+#
+# Setup and lifecycle:
+#   scripts\setup-tts.ps1        build the sidecar environment (one time)
+#   scripts\pull-tts-model.ps1   download the model (~3 GB, resumable)
+#   scripts\tts-serve.ps1        start / -Stop / -Status
+#
+# Off, and it stays off on this machine. Measured here (i3-6006U, 2C/4T, no
+# CUDA): loading the weights takes 170.8s, and a single 3-second sentence had
+# not finished generating after 1,069s -- an RTF above 356, against the 0.025
+# the upstream quotes on an H100. Turning this on would stall every ask and
+# every voice turn for eighteen minutes to say one sentence, which is exactly
+# what say() was written to prevent; it returns a reason instead of raising, so
+# even enabled it degrades rather than failing a turn.
+#
+# The integration is engine-agnostic on purpose -- say() is one POST, and the
+# markdown stripping, the doctor row and the config keys do not care which
+# server answers. docs/integrations/tts.md covers what it would take to put a
+# CPU-sized engine (Piper, ~60 MB voices, RTF ~0.1) behind the same port.
+tts_enabled = false
+tts_base_url = "http://127.0.0.1:8182"
+
+# How Alan sounds: OmniVoice voice design, attributes in free text. Empty lets
+# the model pick a voice, which is the sane default -- naming one is a taste
+# decision to make after you have heard what the untuned one is like.
+tts_instruct = ""
+
+# Seconds to wait for one synthesis. Generous because the first answer of a
+# session also pays for the model to load from disk. The sidecar caps input
+# at 1200 characters, so a runaway is bounded by input size as well as here.
+tts_timeout = 300.0
+
+# false synthesizes without playing -- a health check that exercises the whole
+# path on a machine with no speaker, without needing one to pass.
+tts_play = true
+
 [scheduler]
 # Always-on background tasks (Phase 1).
 #

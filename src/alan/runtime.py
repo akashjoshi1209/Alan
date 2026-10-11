@@ -165,6 +165,10 @@ class AlanRuntime:
             ),
             "ecc": self.ecc_note or "not registered",
             "voice": voice_module.describe(self.settings.voice),
+            # Reported separately from the microphone: two switches, two costs,
+            # and doctor has to be able to say "hearing works, speech is off"
+            # rather than collapsing both into one row's verdict.
+            "speech": voice_module.describe_speech(self.settings.voice),
             "knowledge": (
                 {"enabled": True, "note": self.knowledge_note, **self.knowledge.stats()}
                 if self.knowledge is not None

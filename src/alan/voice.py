@@ -1,4 +1,4 @@
-"""Voice input: talk to Alan instead of typing.
+"""Voice: talk to Alan instead of typing, and hear the answer back.
 
 Alan does not transcribe anything itself. [whisper-flow](https://github.com/
 dimastatz/whisper-flow) runs as a sidecar in its own environment
@@ -13,22 +13,39 @@ permission gate and the same verified reporting as a typed one. Voice raises no
 capability: the transcript is plain text, and an agent still cannot approve
 itself.
 
+Speaking is the mirror image and the same rule. [OmniVoice](https://github.com/
+k2-fsa/OmniVoice) serves from ``env\\tts\\python`` on 8182 through
+``src\\tts_server.py``; ``say()`` posts the reply and plays what comes back.
+The two halves have separate switches because they cost differently -- whisper
+is a resident 150 MB, OmniVoice is ~2.5 GB -- so an operator on a 4 GB machine
+can keep the microphone and give up the voice.
+
+Nothing here may break a turn. Speech output is decoration over an answer that
+has already been rendered, so ``say()`` returns a reason rather than raising:
+a sidecar that is down costs the spoken reply and never the answer itself.
+
 Layout, following the browser sidecar:
 
 * ``whisper_recorder.py`` lives beside ``src\\alan`` (not inside it) because it
   is executed by the sidecar interpreter, which deliberately cannot import Alan.
+* ``tts_server.py`` is the same shape in the other direction: a server, run by
+  the TTS interpreter, that needs OmniVoice and the standard library and
+  nothing from Alan.
 * this module holds Alan's own logic -- is the sidecar up, is the client
-  installed, run it and collect the transcript -- and is unit-testable without
-  a microphone, a model or a running server.
+  installed, run it and collect the transcript, post the reply and play it --
+  and is unit-testable without a microphone, a model or a running server.
 """
 
 from __future__ import annotations
 
 import json
+import re
 import subprocess
+import tempfile
+from pathlib import Path
 from typing import Callable, Sequence
 from urllib.error import URLError
-from urllib.request import urlopen
+from urllib.request import Request, urlopen
 
 from .config import HOME, VoiceSettings
 
@@ -40,6 +57,16 @@ RECORDER_PY = HOME / "env" / "whisper" / "python" / "python.exe"
 RECORDER = HOME / "src" / "whisper_recorder.py"
 #: The wire protocol the client speaks (docs/protocol.md in the vendor clone).
 PROTOCOL_VERSION = 1
+#: TTS has its own version counter. Sharing one with the microphone would mean
+#: a bump for either half silently invalidated the other's compatibility check.
+TTS_PROTOCOL_VERSION = 1
+#: The pinned TTS source (git-ignored, same rule as VENDOR above).
+TTS_VENDOR = HOME / "vendor" / "OmniVoice"
+#: The TTS sidecar interpreter, and the server it runs. Neither can import
+#: Alan -- the ``._pth`` src hook is stripped at setup -- so both are executed
+#: as files rather than imported as modules.
+TTS_PY = HOME / "env" / "tts" / "python" / "python.exe"
+TTS_SERVER = HOME / "src" / "tts_server.py"
 
 
 def ws_url(settings: VoiceSettings) -> str:
@@ -159,16 +186,198 @@ def listen(
     return (result.stdout or "").strip()
 
 
-def say(settings: VoiceSettings, text: str) -> None:
-    """(Reserved for TTS.) Kept so callers have one obvious place to add it.
+def tts_ready(settings: VoiceSettings) -> tuple[bool, str]:
+    """Is the *speech output* sidecar up? Kept apart from :func:`ready`, which
+    is the microphone's.
 
-    Speaking answers back is deliberately not wired: Alan's replies are read in
-    a terminal, and a voice channel that only half works -- hears fine, mumbles
-    the answer -- is worse than none. This is where it goes when it does.
+    Same reason for checking ``protocol_version`` here: a client that ignores
+    it and a server that changed the wire format fail as silence or as a
+    screech of malformed audio, which is worse than a refusal to start.
     """
-    raise NotImplementedError(
-        f"speech output is not implemented; asked to say {text!r} via {settings!r}"
+    url = settings.tts_base_url.rstrip("/") + "/ready"
+    try:
+        with urlopen(url, timeout=settings.timeout) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except (URLError, OSError, ValueError) as exc:
+        reason = getattr(exc, "reason", exc)
+        return False, f"not reachable at {url} ({reason})"
+
+    version = payload.get("protocol_version")
+    if version != TTS_PROTOCOL_VERSION:
+        return False, (
+            f"speaks protocol v{version}, Alan speaks v{TTS_PROTOCOL_VERSION} "
+            "-- update the older side"
+        )
+    # Up but broken is a different state from not up, and the distinction is
+    # the whole reason /ready reports load_error instead of dying: one says
+    # "start it", the other says "look at the log".
+    if payload.get("load_error"):
+        return False, f"model failed to load: {payload['load_error']}"
+
+    loaded = "resident" if payload.get("model_loaded") else "not loaded yet"
+    return True, (
+        f"ready on {url} (model {payload.get('model')}, {payload.get('dtype')}, "
+        f"{loaded}, protocol v{version})"
     )
+
+
+#: Block-then-inline code, headers, list markers, links, emphasis and tables --
+#: the syntax a model writes and a speaker cannot say. Ordered deliberately:
+#: fences first so their contents are never rewritten by a later rule, list
+#: markers before emphasis so ``* item`` is not mistaken for italics, and
+#: emphasis before links so ``**[x](y)**`` unwraps in the right direction.
+#:
+#: ``MULTILINE`` anchors ``^``/``$`` to line starts, which is what makes the
+#: heading and list rules behave; ``DOTALL`` is what lets the fence rule
+#: actually span a multi-line block. Each pattern is applied to prose that
+#: merely *contains* markup, so every rule is anchored or character-classed to
+#: leave ordinary punctuation alone.
+_MD_SPEECH_RULES: tuple[tuple[str, str], ...] = (
+    (r"```.*?```", " "),                          # fenced code, spans lines
+    (r"`([^`]*)`", r"\1"),                        # inline code
+    (r"^#{1,6}\s*", ""),                          # ATX heading marks
+    (r"^\s*[-*+]\s+", "  "),                      # bullet -> a breath
+    (r"^\s*\d+\.\s+", "  "),                      # numbered -> a breath
+    (r"^\s*[|>]\s*", ""),                         # table/quote gutters
+    (r"\*\*\*([^*]+)\*\*\*", r"\1"),
+    (r"\*\*([^*]+)\*\*", r"\1"),
+    (r"(?<!\*)\*([^*]+)\*(?!\*)", r"\1"),
+    (r"__([^_]+)__", r"\1"),
+    (r"\[([^\]]+)\]\([^)]*\)", r"\1"),            # [text](url) -> text
+    (r"\|", " "),                                 # table cells
+    (r"^---+$", " "),                             # horizontal rules
+)
+_MD_FLAGS = re.MULTILINE | re.DOTALL
+
+
+def for_speech(text: str) -> str:
+    """Strip markdown so the reply can be *said* rather than recited.
+
+    Reads back to a listener as the answer, not as "hash hash heading asterisk
+    asterisk". Exposed rather than folded into ``say()`` because it is the
+    fiddly half and belongs under its own tests: synthesis is one HTTP call,
+    this is the part that can quietly ruin every spoken reply.
+    """
+    cleaned = text or ""
+    for pattern, replacement in _MD_SPEECH_RULES:
+        cleaned = re.sub(pattern, replacement, cleaned, flags=_MD_FLAGS)
+    # Collapse the runs of whitespace the rules above leave behind, and cap
+    # what is sent: the sidecar refuses over MAX_CHARS anyway, and sending a
+    # known-too-long string wastes a round trip to learn what the cap is.
+    return re.sub(r"\s+", " ", cleaned).strip()[:1200]
+
+
+def _synthesize(settings: VoiceSettings, text: str) -> bytes:
+    """POST the text to the sidecar and return the WAV bytes."""
+    url = settings.tts_base_url.rstrip("/") + "/synthesize"
+    body = json.dumps({"text": text, "instruct": settings.tts_instruct or None})
+    request = Request(
+        url,
+        data=body.encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urlopen(request, timeout=settings.tts_timeout) as response:
+        return response.read()
+
+
+def _play(wav: bytes) -> None:
+    """Write the WAV to a scratch file and play it through the default device.
+
+    A file rather than ``SND_MEMORY``: winsound's in-memory path is fussy about
+    buffer lifetime across Python versions, and a one-line scratch file works
+    on all of them. Deleted after, so a session of replies leaves no litter.
+    """
+    import winsound  # Windows-only, imported lazily: a non-Windows run that
+                     # only checks readiness must not fail to import here.
+
+    handle = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
+    path = Path(handle.name)
+    try:
+        handle.write(wav)
+        handle.close()
+        # SND_SYNC, not SND_ASYNC: the caller's turn should not report success
+        # while the sentence it is announcing has not finished being said.
+        winsound.PlaySound(str(path), winsound.SND_FILENAME | winsound.SND_SYNC)
+    finally:
+        path.unlink(missing_ok=True)
+
+
+def say(
+    settings: VoiceSettings,
+    text: str,
+    *,
+    synthesizer: Callable[[VoiceSettings, str], bytes] | None = None,
+    player: Callable[[bytes], None] | None = None,
+) -> tuple[bool, str]:
+    """Speak one reply. Returns ``(spoken, note)`` and **never raises**.
+
+    Never raising is the contract, not a convenience. Speech output sits after
+    an answer that has already been rendered to the terminal, so the only thing
+    a failure can usefully do is cost the sound -- and an exception here would
+    take down a completed turn to report that a speaker was unavailable.
+
+    ``synthesizer`` and ``player`` are injectable so tests exercise the logic
+    (the disabled case, the empty case, the failure path) without a sidecar, a
+    model or a sound card.
+    """
+    if not settings.tts_enabled:
+        return False, "speech output is off - \\[voice] tts_enabled = true turns it on"
+
+    spoken = for_speech(text)
+    if not spoken:
+        return False, "nothing to say"
+
+    synthesize = synthesizer or _synthesize
+    play = player or _play
+
+    try:
+        wav = synthesize(settings, spoken)
+    except (URLError, OSError, ValueError, TimeoutError) as exc:
+        reason = getattr(exc, "reason", exc)
+        return False, (
+            f"synthesis failed at {settings.tts_base_url} ({reason}) - "
+            "start it with scripts\\tts-serve.ps1; the answer above stands"
+        )
+    if not wav:
+        return False, "sidecar returned no audio"
+
+    if not settings.tts_play:
+        # Synthesized but deliberately not played: a health check that proves
+        # the whole path works on a box with no speaker, without needing one.
+        return True, f"synthesized {len(wav)} bytes (\\[voice] tts_play = false)"
+
+    try:
+        play(wav)
+    except (OSError, RuntimeError, ImportError) as exc:
+        return False, f"audio came back but could not be played: {exc}"
+    return True, f"said {len(wav)} bytes"
+
+
+def describe_speech(settings: VoiceSettings) -> dict:
+    """One row for ``alan doctor``: the output half of voice, if it is on."""
+    if not settings.tts_enabled:
+        return {
+            "state": "off",
+            "enabled": False,
+            "reachable": False,
+            "note": "disabled in settings",
+        }
+
+    reachable, note = tts_ready(settings)
+    if reachable:
+        state, text = "ready", note
+    else:
+        # Enabled but not answering names the command that fixes it: a bare
+        # port number sends the reader hunting through scripts.
+        state = "configured"
+        text = f"{note} - start it with scripts\\tts-serve.ps1"
+    return {
+        "state": state,
+        "enabled": True,
+        "reachable": reachable,
+        "note": text,
+    }
 
 
 def describe(settings: VoiceSettings) -> dict:
