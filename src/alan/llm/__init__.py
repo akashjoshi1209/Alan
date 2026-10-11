@@ -61,6 +61,9 @@ def _construct(name: str, settings: Settings) -> Provider:
         "max_tokens": settings.max_tokens,
         "priority": table.priority,
         "categories": _to_categories(table.categories),
+        # Ride along with every backend, so no provider can be constructed
+        # with a handshake ceiling other than what settings.toml asked for.
+        "connect_timeout": table.connect_timeout,
     }
     if name == "ollama":
         return OllamaProvider(

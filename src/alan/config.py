@@ -76,6 +76,21 @@ class ProviderSettings:
     #: A chat turn pauses while the user reads and types; reloading the model
     #: costs ~12 s, which is charged entirely to the next answer.
     keep_alive: str = ""
+    #: Ceiling on the TCP + TLS handshake to a cloud endpoint, in seconds.
+    #:
+    #: Kept separate from the read timeout because the two fail for unrelated
+    #: reasons and want unrelated answers: a slow handshake means the network
+    #: path is slow or filtered, a slow read means the model is still thinking.
+    #:
+    #: The SDKs ship connect = 5.0s, which is too tight for any link that runs
+    #: through a TLS-inspecting proxy or an antivirus web filter. Measured on
+    #: this machine at ~10.5s per connection with Quick Heal's web-security
+    #: driver active, which surfaced as ``groq stream failed: Request timed
+    #: out.`` -- the API answered correctly the moment the handshake was
+    #: allowed to complete, so the timeout was reporting the local filter as if
+    #: it were the provider. Read and write keep the SDK default, so a hung
+    #: generation is still bounded and this only widens the connect phase.
+    connect_timeout: float = 30.0
 
 
 #: The env var holding each provider's key.
@@ -159,6 +174,7 @@ def _provider_defaults(name: str) -> ProviderSettings:
         categories=tuple(preset.get("categories", ())),
         num_ctx=0,
         keep_alive="",
+        connect_timeout=float(preset.get("connect_timeout", 30.0)),
     )
 
 
@@ -535,6 +551,7 @@ def _provider_from_table(name: str, table: dict) -> ProviderSettings:
         categories=tuple(str(value) for value in (categories or ())),
         num_ctx=int(table.get("num_ctx", 0) or 0),
         keep_alive=str(table.get("keep_alive", "") or ""),
+        connect_timeout=float(table.get("connect_timeout", default.connect_timeout)),
     )
 
 

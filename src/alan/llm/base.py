@@ -32,6 +32,7 @@ class Provider(ABC):
         max_tokens: int = 1024,
         priority: int = 100,
         categories: object = None,
+        connect_timeout: float = 30.0,
         **_: object,
     ) -> None:
         if model:
@@ -39,6 +40,12 @@ class Provider(ABC):
         self.base_url = base_url
         self.temperature = temperature
         self.max_tokens = max_tokens
+        #: Ceiling on the TCP + TLS handshake. Deliberately wider than the
+        #: SDKs' 5.0s default: that number assumes a clean link, and any TLS
+        #: inspecting proxy or antivirus web filter pushes the handshake well
+        #: past it, which then gets reported as a provider failure. The read
+        #: timeout is left at the SDK default so a stuck generation still ends.
+        self.connect_timeout = float(connect_timeout or 30.0)
         #: Lower wins (0 = preferred). 100 is deliberately neutral: it is the
         #: value every provider reports when config says nothing, so an unset
         #: priority cannot be mistaken for a strong one.
@@ -87,3 +94,62 @@ def _merge_system(
 
 def as_text(chunks: Iterable[str]) -> str:
     return "".join(chunks)
+
+
+#: Phrases the SDKs and their HTTP layer use for a handshake that never
+#: finished. Matched case-insensitively against the whole exception chain,
+#: because the signal is one level down: ``openai.APITimeoutError`` only says
+#: "Request timed out.", while the ``httpcore`` ConnectTimeout that caused it
+#: says which phase actually failed.
+_CONNECT_TIMEOUT_MARKERS = (
+    "handshake operation timed out",
+    "connecttimeout",
+    "connect timeout",
+    "all connection attempts failed",
+)
+
+
+def _is_connect_timeout(exc: BaseException) -> bool:
+    """Did the request fail before it reached the API, during connect?
+
+    Walks ``__cause__``/``__context__`` rather than inspecting ``exc`` alone:
+    the SDK wraps the HTTP layer's error, and the wrapper deliberately loses
+    the distinction between "never connected" and "connected, then stalled",
+    which is the whole difference between a local network problem and a slow
+    model. Markers are matched against the type name as well as the text, since
+    several of these carry a terse message and a descriptive class.
+    """
+    seen: set[int] = set()
+    node: BaseException | None = exc
+    while node is not None and id(node) not in seen:
+        seen.add(id(node))
+        text = f"{type(node).__name__} {node}".lower()
+        if any(marker in text for marker in _CONNECT_TIMEOUT_MARKERS):
+            return True
+        node = node.__cause__ or node.__context__
+    return False
+
+
+def connect_hint(exc: BaseException, connect_timeout: float) -> str:
+    """Explain a connect-phase failure, or return ``""`` when it was not one.
+
+    Appended to the provider's own message rather than replacing it, so the
+    underlying SDK text -- which is what gets searched for -- stays intact.
+
+    Without this, a connect timeout reads as ``groq stream failed: Request
+    timed out.``, which sends the operator to the provider's dashboard to
+    investigate a service that was never reached and was answering correctly
+    all along. That exact misdirection cost an hour of tracing on this
+    machine, where an antivirus web filter was adding ~10.5s to every TLS
+    handshake against the SDK's 5.0s default.
+    """
+    if not _is_connect_timeout(exc):
+        return ""
+    return (
+        f" (the TLS handshake did not finish within {connect_timeout:g}s, so "
+        f"the request never reached the provider -- this points at a local "
+        f"network filter, proxy or antivirus web-protection module delaying "
+        f"HTTPS, not at the API. Raise connect_timeout under [provider] in "
+        f"config/settings.toml, or exclude this application from HTTPS "
+        f"inspection.)"
+    )

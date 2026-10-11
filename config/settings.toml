@@ -55,6 +55,21 @@ model = "qwen/qwen3.8-27b"
 base_url = "https://api.groq.com/openai/v1"
 priority = 0
 categories = ["general", "fast", "coding"]
+# Ceiling on the TCP + TLS handshake, in seconds. Applies to every provider
+# (the default is 30.0); set it under a table only to override it there.
+#
+# The SDKs ship connect = 5.0s, which assumes a clean link. On a link with a
+# TLS-inspecting proxy or an antivirus web filter in the path, the handshake
+# alone cost ~10.5s here, so every request failed before the API was ever
+# reached and surfaced as "groq stream failed: Request timed out." -- a message
+# that points at the provider while describing the local filter. Raising this
+# turned that failure into a 10.6s success.
+#
+# Only the connect phase moves; read and write keep the SDK default, so a
+# generation that genuinely hangs is still bounded. Raise this only when a
+# failure message says the handshake did not finish -- if the provider is slow
+# to answer, that is a different phase and this setting will not help.
+connect_timeout = 30.0
 
 # One key reaches many models; ids are "vendor/name". Needs OPENROUTER_API_KEY.
 # Verified live: GET /models returned 200 with 464 models.

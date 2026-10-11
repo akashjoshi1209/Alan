@@ -31,7 +31,7 @@ from alan.interfaces.model import (
 )
 from alan.interfaces.types import _SECRET_ENV_NAMES, redact
 from alan.llm import _NAMES, _construct
-from alan.llm.base import Provider, ProviderError
+from alan.llm.base import Provider, ProviderError, _is_connect_timeout, connect_hint
 from alan.llm.cloud import OpenAIProvider
 from alan.models.router import ModelRouter, RoutingRequest
 
@@ -331,6 +331,121 @@ class RedactionTest(unittest.TestCase):
     def test_a_bare_openrouter_key_shape_is_masked(self) -> None:
         key = "sk-or-v1-" + "abcdefghij1234567890"
         self.assertNotIn(key, redact(f"401 from {key}"))
+
+
+class ConnectTimeoutTest(unittest.TestCase):
+    """A handshake that never finished must not be reported as a slow API.
+
+    Reproduced live on this machine: Quick Heal's web-security driver
+    (``webssx8.sys``) added ~10.5s to every TLS handshake while SMTP, NNTP and
+    plain TCP all stayed under 0.9s. The SDKs' connect default is 5.0s, so
+    every cloud request failed before the API was reached and surfaced as
+    "groq stream failed: Request timed out." -- naming a provider that had
+    never been contacted, and which answered in 10.6s once only the connect
+    phase was widened.
+    """
+
+    def test_a_table_can_widen_the_connect_timeout(self) -> None:
+        self.assertEqual(
+            _provider_from_table("groq", {"connect_timeout": 45}).connect_timeout,
+            45.0,
+        )
+
+    def test_the_connect_timeout_defaults_to_thirty_for_every_provider(self) -> None:
+        for name in PROVIDER_NAMES:
+            with self.subTest(provider=name):
+                self.assertEqual(
+                    _provider_from_table(name, {}).connect_timeout, 30.0
+                )
+
+    def test_an_older_settings_table_still_gets_the_default(self) -> None:
+        """settings.toml files written before this key existed must keep
+        working, and keep a sane handshake ceiling rather than inheriting 0."""
+        parsed = _provider_from_table("groq", {"model": "llama-3.3-70b-versatile"})
+        self.assertEqual(parsed.connect_timeout, 30.0)
+
+    def test_the_provider_passes_it_to_the_sdk_client(self) -> None:
+        with key_in_env("GROQ_API_KEY", "gsk_" + "x" * 40):
+            provider = OpenAIProvider(provider="groq", connect_timeout=45.0)
+            timeout = provider._get_client().timeout
+        self.assertEqual(timeout.connect, 45.0)
+        # Only the connect phase moves. Read stays at the SDK default, so a
+        # generation that genuinely hangs is still bounded as it was before.
+        self.assertEqual(timeout.read, 600.0)
+
+    def test_a_nested_connect_timeout_is_recognised(self) -> None:
+        """The signal is one level down: the SDK's own error says only
+        "Request timed out.", while the HTTP layer's names the phase."""
+
+        class ConnectTimeout(Exception):
+            pass
+
+        inner = ConnectTimeout("_ssl.c:993: The handshake operation timed out")
+        outer = Exception("Request timed out.")
+        outer.__cause__ = inner
+
+        self.assertTrue(_is_connect_timeout(outer))
+
+    def test_a_connect_timeout_several_layers_down_is_still_found(self) -> None:
+        class ConnectTimeout(Exception):
+            pass
+
+        inner = ConnectTimeout("all connection attempts failed")
+        middle = Exception("wrapper")
+        middle.__cause__ = inner
+        outer = Exception("Request timed out.")
+        outer.__cause__ = middle
+
+        self.assertTrue(_is_connect_timeout(outer))
+
+    def test_a_slow_read_is_not_mistaken_for_a_connect_timeout(self) -> None:
+        """The two want opposite advice: widening connect fixes one and cannot
+        touch the other, so claiming the hint for a read stall would send the
+        operator to change a setting that does nothing."""
+        self.assertFalse(_is_connect_timeout(Exception("Request timed out.")))
+        self.assertFalse(_is_connect_timeout(Exception("stream closed early")))
+
+    def test_a_cyclic_exception_chain_terminates(self) -> None:
+        first = Exception("a")
+        second = Exception("b")
+        first.__cause__ = second
+        second.__context__ = first
+        self.assertFalse(_is_connect_timeout(first))
+
+    def test_the_hint_is_only_emitted_when_it_is_earned(self) -> None:
+        """Every other failure keeps its message byte for byte: the hint is
+        additive, so it can never mask the SDK's own text."""
+
+        class ConnectTimeout(Exception):
+            pass
+
+        inner = ConnectTimeout("The handshake operation timed out")
+        outer = Exception("Request timed out.")
+        outer.__cause__ = inner
+
+        self.assertEqual(connect_hint(Exception("401 unauthorized"), 30.0), "")
+        hint = connect_hint(outer, 30.0)
+        self.assertTrue(hint.startswith(" (the TLS handshake"))
+        self.assertIn("30s", hint)
+        self.assertIn("antivirus", hint)
+
+    def test_the_failed_request_message_still_carries_the_sdk_text(self) -> None:
+        """A failing request must name the backend, keep the SDK's message and
+        add the phase, in that order -- the operator reads left to right.
+
+        Aimed at the discard port so it fails locally and instantly rather than
+        spending a real request on a real provider.
+        """
+        with key_in_env("GROQ_API_KEY", "gsk_" + "x" * 40):
+            provider = OpenAIProvider(
+                provider="groq",
+                base_url="http://127.0.0.1:9/v1",
+                connect_timeout=5.0,
+            )
+            with self.assertRaises(ProviderError) as caught:
+                provider.chat([{"role": "user", "content": "hi"}])
+        message = str(caught.exception)
+        self.assertTrue(message.startswith("groq request failed: "), message)
 
 
 if __name__ == "__main__":

@@ -4,8 +4,13 @@ from __future__ import annotations
 
 from typing import Iterator, Sequence
 
-from .base import Message, Provider, ProviderError, _merge_system
+from .base import Message, Provider, ProviderError, _merge_system, connect_hint
 from ..config import API_KEY_ENV, get_api_key
+
+#: Read/write ceiling passed to the SDKs. Equal to their own default, so
+#: widening the connect phase below is the only behavioural change: a hung
+#: generation is bounded exactly as it was before.
+_READ_TIMEOUT = 600.0
 
 
 class OpenAIProvider(Provider):
@@ -39,8 +44,19 @@ class OpenAIProvider(Provider):
     def _get_client(self):
         if self._client is None:
             from openai import OpenAI
+            from openai import Timeout as OpenAITimeout
 
-            params: dict = {"api_key": self._api_key}
+            params: dict = {
+                "api_key": self._api_key,
+                # Only the connect phase is widened. The SDK defaults it to
+                # 5.0s, which assumes a clean link and cannot survive a TLS
+                # inspecting proxy or an antivirus web filter -- both of which
+                # push the handshake well past that and then get reported as a
+                # provider timeout. Read/write stay at the SDK's default.
+                "timeout": OpenAITimeout(
+                    _READ_TIMEOUT, connect=self.connect_timeout
+                ),
+            }
             if self.base_url:
                 params["base_url"] = self.base_url
             self._client = OpenAI(**params)
@@ -77,7 +93,10 @@ class OpenAIProvider(Provider):
             # Names the backend that actually failed. When this class serves
             # Groq, an error reported as "OpenAI request failed" sends the
             # operator to the wrong dashboard to look for it.
-            raise ProviderError(f"{self.name} request failed: {exc}") from exc
+            raise ProviderError(
+                f"{self.name} request failed: {exc}"
+                f"{connect_hint(exc, self.connect_timeout)}"
+            ) from exc
         return resp.choices[0].message.content or ""
 
     def stream(
@@ -97,7 +116,10 @@ class OpenAIProvider(Provider):
                 if delta:
                     yield delta
         except Exception as exc:  # noqa: BLE001
-            raise ProviderError(f"{self.name} stream failed: {exc}") from exc
+            raise ProviderError(
+                f"{self.name} stream failed: {exc}"
+                f"{connect_hint(exc, self.connect_timeout)}"
+            ) from exc
 
 
 class AnthropicProvider(Provider):
@@ -113,8 +135,16 @@ class AnthropicProvider(Provider):
     def _get_client(self):
         if self._client is None:
             from anthropic import Anthropic
+            from anthropic import Timeout as AnthropicTimeout
 
-            params: dict = {"api_key": self._api_key}
+            params: dict = {
+                "api_key": self._api_key,
+                # Same reasoning as OpenAIProvider: widen only the connect
+                # phase, which is where a local HTTPS filter shows up.
+                "timeout": AnthropicTimeout(
+                    _READ_TIMEOUT, connect=self.connect_timeout
+                ),
+            }
             if self.base_url:
                 params["base_url"] = self.base_url
             self._client = Anthropic(**params)
@@ -156,7 +186,10 @@ class AnthropicProvider(Provider):
                 max_tokens=self.max_tokens,
             )
         except Exception as exc:  # noqa: BLE001
-            raise ProviderError(f"Anthropic request failed: {exc}") from exc
+            raise ProviderError(
+                f"Anthropic request failed: {exc}"
+                f"{connect_hint(exc, self.connect_timeout)}"
+            ) from exc
         return "".join(
             block.text for block in resp.content if getattr(block, "type", "") == "text"
         )
@@ -177,4 +210,7 @@ class AnthropicProvider(Provider):
                 for text in events.text_stream:
                     yield text
         except Exception as exc:  # noqa: BLE001
-            raise ProviderError(f"Anthropic stream failed: {exc}") from exc
+            raise ProviderError(
+                f"Anthropic stream failed: {exc}"
+                f"{connect_hint(exc, self.connect_timeout)}"
+            ) from exc
