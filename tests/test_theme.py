@@ -152,6 +152,9 @@ def _status(**overrides) -> dict:
         "vibecoder": "C:\\npm\\vibecoder.CMD",
         "ecc": "293 skills",
         "voice": {"state": "ready", "note": "ready on http://127.0.0.1:8181"},
+        # Reported separately from the microphone: an operator can be hearing
+        # fine and have speech off, and doctor has to say which.
+        "speech": {"state": "off", "note": "disabled in settings"},
         "telegram": {
             "enabled": False, "running": False,
             "note": "not configured (set bot_token and chat_id)", "chat_id": "",
@@ -210,6 +213,21 @@ class DoctorRowsTest(unittest.TestCase):
         self.assertEqual(
             self._state(_status(voice={"state": "something-new", "note": "x"}), "voice"),
             "err", "an unknown state must not draw a checkmark")
+
+    def test_speech_is_its_own_row_with_its_own_glyphs(self) -> None:
+        """A fourth switch needs its own verdict: the interesting state is
+        'hearing works, speech is off', which one row cannot express."""
+        self.assertEqual(self._state(_status(), "speech"), "off")
+        self.assertEqual(
+            self._state(_status(speech={"state": "configured", "note": "start it"}),
+                        "speech"),
+            "warn")
+        ready = {"state": "ready", "note": "ready on http://127.0.0.1:8182"}
+        self.assertEqual(self._state(_status(speech=ready), "speech"), "ok")
+        self.assertEqual(
+            self._state(_status(speech={"state": "something-new", "note": "x"}),
+                        "speech"),
+            "err", "an unknown speech state must not draw a checkmark")
 
     def test_telegram_distinguishes_off_configured_and_running(self) -> None:
         self.assertEqual(self._state(_status(), "telegram"), "off")
