@@ -13,11 +13,13 @@ permission gate and the same verified reporting as a typed one. Voice raises no
 capability: the transcript is plain text, and an agent still cannot approve
 itself.
 
-Speaking is the mirror image and the same rule. [OmniVoice](https://github.com/
-k2-fsa/OmniVoice) serves from ``env\\tts\\python`` on 8182 through
-``src\\tts_server.py``; ``say()`` posts the reply and plays what comes back.
-The two halves have separate switches because they cost differently -- whisper
-is a resident 150 MB, OmniVoice is ~2.5 GB -- so an operator on a 4 GB machine
+Speaking is the mirror image and the same rule. A TTS sidecar serves from
+``env\\tts\\python`` on 8182; ``say()`` posts the reply and plays what comes
+back. Which engine answers is ``scripts\\tts-serve.ps1``'s choice and unknown to
+this module -- Piper (the default; CPU-fast, ``src\\tts_server_piper.py``) or
+OmniVoice (GPU-class, ``src\\tts_server.py``). The two halves have separate
+switches because they cost differently -- whisper is a resident 150 MB, TTS is
+tens of MB (Piper) to ~2.5 GB (OmniVoice) -- so an operator on a 4 GB machine
 can keep the microphone and give up the voice.
 
 Nothing here may break a turn. Speech output is decoration over an answer that
@@ -297,9 +299,13 @@ def _play(wav: bytes) -> None:
     try:
         handle.write(wav)
         handle.close()
-        # SND_SYNC, not SND_ASYNC: the caller's turn should not report success
+        # Play *synchronously*: the caller's turn should not report success
         # while the sentence it is announcing has not finished being said.
-        winsound.PlaySound(str(path), winsound.SND_FILENAME | winsound.SND_SYNC)
+        # winsound has no SND_SYNC -- zero flags is already synchronous, and
+        # referencing a constant that does not exist raises AttributeError,
+        # which is exactly how playback sank before. SND_FILENAME alone gets
+        # the same behaviour with only constants that exist.
+        winsound.PlaySound(str(path), winsound.SND_FILENAME)
     finally:
         path.unlink(missing_ok=True)
 
@@ -339,7 +345,8 @@ def say(
     started = time.perf_counter()
     try:
         wav = synthesize(settings, spoken)
-    except (URLError, OSError, ValueError, TimeoutError) as exc:
+    except Exception as exc:  # noqa: BLE001 - the contract is "never raises",
+        # and even a client bug in this file must cost the sound, not the turn.
         reason = getattr(exc, "reason", exc)
         return False, (
             f"synthesis failed at {settings.tts_base_url} ({reason}) - "
@@ -364,7 +371,10 @@ def say(
 
     try:
         play(wav)
-    except (OSError, RuntimeError, ImportError) as exc:
+    except Exception as exc:  # noqa: BLE001 - the contract is "never raises":
+        # the sound is the last thing a winning turn can lose, and the
+        # AttributeError that sunk winsound.SND_SYNC playback is proof that a
+        # narrow tuple is a gamble.
         return False, f"audio came back but could not be played: {exc}"
     return True, f"said {len(wav)} bytes in {elapsed:.1f}s{shortened}"
 

@@ -285,36 +285,41 @@ threshold = 500
 
 # Speech output: the other direction of the same channel.
 #
-# Alan hears with whisper-flow (above) and answers with OmniVoice (below) --
-# k2-fsa's 613M-param text-to-speech, run locally so a reply never leaves the
-# machine either. Separate switch from `enabled` on purpose: whisper is a
-# resident ~150 MB, OmniVoice is ~1.5-3.2 GB of weights that only exist in RAM
-# while its sidecar runs, and on a 4 GB box an operator must be able to keep
-# the microphone and give up the voice. Neither implies the other.
+# Alan hears with whisper-flow (above) and answers out loud, locally, so a
+# reply never leaves the machine either. Separate switch from `enabled` on
+# purpose: hearing costs a whisper model that is already resident, speaking
+# costs a TTS sidecar that holds its engine in RAM only while it runs, and on a
+# 4 GB box an operator must be able to keep the microphone and give up the
+# voice. Neither implies the other.
+#
+# Two engines share this port; scripts\tts-serve.ps1 -Engine picks one:
+#   piper      (default) small ONNX voices, faster than real time here
+#   omnivoice  the 613M diffusion model, only worth it on a GPU
 #
 # Setup and lifecycle:
 #   scripts\setup-tts.ps1        build the sidecar environment (one time)
-#   scripts\pull-tts-model.ps1   download the model (~3 GB, resumable)
+#   scripts\pull-tts-voice.ps1   download a Piper voice (~20-60 MB)
+#   scripts\pull-tts-model.ps1   download the OmniVoice model (~3 GB)
 #   scripts\tts-serve.ps1        start / -Stop / -Status
 #
-# Off, and it stays off on this machine. Measured here (i3-6006U, 2C/4T, no
-# CUDA): loading the weights takes 170.8s, and a single 3-second sentence had
-# not finished generating after 1,069s -- an RTF above 356, against the 0.025
-# the upstream quotes on an H100. Turning this on would stall every ask and
-# every voice turn for eighteen minutes to say one sentence, which is exactly
-# what say() was written to prevent; it returns a reason instead of raising, so
-# even enabled it degrades rather than failing a turn.
-#
-# The integration is engine-agnostic on purpose -- say() is one POST, and the
-# markdown stripping, the doctor row and the config keys do not care which
-# server answers. docs/integrations/tts.md covers what it would take to put a
-# CPU-sized engine (Piper, ~60 MB voices, RTF ~0.1) behind the same port.
-tts_enabled = false
+# On, because the CPU engine makes it usable. Measured here (i3-6006U, 2C/4T,
+# no CUDA): Piper -medium voices run at RTF ~0.2 -- about 1.4s to say a ~7s
+# sentence -- so the reply is shorter arriving than it is to listen to.
+# OmniVoice is this machine's ceiling, not its floor: it loads in 170.8s and
+# had not finished one 3-second sentence after 1,069s (RTF above 356), so it is
+# selectable but never a default. The integration is engine-agnostic on purpose
+# -- say() is one POST, and the markdown stripping, the doctor row and the
+# config keys do not care which server answers -- which is exactly what let a
+# CPU-sized engine be dropped in behind the same port.
+tts_enabled = true
 tts_base_url = "http://127.0.0.1:8182"
 
-# How Alan sounds: OmniVoice voice design, attributes in free text. Empty lets
-# the model pick a voice, which is the sane default -- naming one is a taste
-# decision to make after you have heard what the untuned one is like.
+# How Alan sounds. With OmniVoice this is voice design -- attributes in free
+# text, and empty lets the model pick. With Piper it is ignored: Piper has no
+# voice design, so a voice is chosen by name at start-up (TTS_VOICE, i.e.
+# scripts\tts-serve.ps1 -Voice en_US-ryan-medium). Empty is still the right
+# default here: naming an OmniVoice is a taste decision to make after you have
+# heard the untuned one.
 tts_instruct = ""
 
 # Seconds to wait for one synthesis. Generous because the first answer of a

@@ -19,6 +19,7 @@ import sys
 import tempfile
 import threading
 import textwrap
+import types
 import unittest
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
@@ -252,12 +253,45 @@ class SayTest(unittest.TestCase):
         self.assertFalse(ok)
         self.assertIn("no audio device", note)
 
+    def test_a_player_bug_is_contained_like_any_other_failure(self) -> None:
+        """The winsound SND_SYNC AttributeError was exactly this: a defect in
+        the default player escaped ``say()`` because the except tuple was
+        narrow. Any player failure must cost the sound, never the turn."""
+        def broken(_wav):
+            raise AttributeError("module 'winsound' has no attribute 'SND_SYNC'")
+
+        ok, note = voice.say(self._settings(), "hello",
+                             synthesizer=lambda *_: b"RIFF", player=broken)
+
+        self.assertFalse(ok)
+        self.assertIn("could not be played", note)
+
     def test_empty_audio_from_the_sidecar_is_a_failure(self) -> None:
         ok, note = voice.say(self._settings(), "hello",
                              synthesizer=lambda *_: b"", player=lambda _w: None)
 
         self.assertFalse(ok)
         self.assertIn("no audio", note)
+
+
+class PlaySoundTest(unittest.TestCase):
+    """The real player reaches winsound, and only flags that exist may reach it."""
+
+    def test_play_calls_winsound_without_the_broken_constant(self) -> None:
+        fake = types.ModuleType("winsound")
+        fake.SND_FILENAME = 0x00020000
+        calls = []
+        fake.PlaySound = lambda name, flags: calls.append((name, flags))
+
+        with mock.patch.dict(sys.modules, {"winsound": fake}):
+            voice._play(b"RIFF" + b"\x00" * 64)
+
+        self.assertEqual(len(calls), 1)
+        _, flags = calls[0]
+        # SND_SYNC does not exist on winsound (playback is synchronous by
+        # default); a future rewrite must not reach for it again.
+        self.assertEqual(flags, fake.SND_FILENAME)
+        self.assertFalse(hasattr(fake, "SND_SYNC"))
 
 
 class SynthesizeRequestTest(unittest.TestCase):

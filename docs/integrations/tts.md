@@ -1,26 +1,39 @@
-# Voice output (OmniVoice)
+# Voice output (Piper, with OmniVoice for a GPU)
 
 Alan can answer out loud. Speech *in* is [whisper.md](whisper.md); this is the
 other direction of the same channel — the reply goes back through the speaker
 instead of only the screen.
 
-The engine is [OmniVoice](https://github.com/k2-fsa/OmniVoice) (k2-fsa,
-Apache-2.0), a 613M-parameter text-to-speech model based on Qwen3-0.6B with
-voice design — you describe how Alan should sound rather than picking a
-catalogue voice. It runs locally. **No reply text leaves the machine**, for the
-same reason speech in doesn't: the model is on disk at `data\tts\model`, the
-server binds loopback only, and there is no key anywhere in the path.
+Two engines answer the same port, and the choice is a flag on the serve script:
+
+- **[Piper](https://github.com/rhasspy/piper) (MIT) — the default here.** A VITS
+  voice is a few tens of MB of ONNX and synthesizes **faster than real time** on
+  this CPU (RTF ~0.2, measured below), which is what makes voice output usable on
+  a 4 GB / 2-core box. It has no voice design: a voice is a released artifact,
+  chosen by name at start-up.
+- **[OmniVoice](https://github.com/k2-fsa/OmniVoice) (k2-fsa, Apache-2.0)** — a
+  613M-parameter diffusion model based on Qwen3-0.6B with *voice design*: you
+  describe how Alan should sound rather than picking a catalogue voice. Higher
+  ceiling, but measured RTF > 356 here (~18 minutes a sentence), so it is kept
+  for a machine with a GPU.
+
+Either way it runs locally. **No reply text leaves the machine**, for the same
+reason speech in doesn't: the engine is on disk under `data\tts\`, the server
+binds loopback only, and there is no key anywhere in the path.
 
 ## Layout
 
 | Piece | Where | Why there |
 |---|---|---|
-| Model source | `vendor\OmniVoice` (git-ignored) | read, not merged — same rule as `vendor\whisper-flow` |
-| Environment | `env\tts\python` | transformers + CPU torch stay out of the main env; the `._pth` has Alan's `src` stripped, so it cannot `import alan` |
-| Server script | `src\tts_server.py` | **Alan's own**, not OmniVoice's: upstream ships a Gradio demo and a CLI, neither of which is an API a client can call |
-| Lifecycle script | `scripts\tts-serve.ps1` | start / `-Stop` / `-Status`, like `whisper-serve.ps1` |
-| Setup script | `scripts\setup-tts.ps1` | builds `env\tts\python` (CPU-only torch, inference deps only) |
-| Model download | `scripts\pull-tts-model.ps1` → `src\pull_tts_model.py` | ~3.04 GB, resumable, one connection at a time |
+| Piper server | `src\tts_server_piper.py` | **Alan's own**; stdlib + `piper`, same protocol as the OmniVoice server |
+| OmniVoice server | `src\tts_server.py` | **Alan's own**, not OmniVoice's: upstream ships a Gradio demo and a CLI, neither of which is an API a client can call |
+| Piper voices | `data\tts\piper\<voice>.onnx` (git-ignored) | ~20–60 MB each, chosen by name at start-up |
+| OmniVoice source | `vendor\OmniVoice` (git-ignored) | read, not merged — same rule as `vendor\whisper-flow` |
+| Environment | `env\tts\python` | torch / transformers / piper stay out of the main env; the `._pth` has Alan's `src` stripped, so it cannot `import alan` |
+| Lifecycle script | `scripts\tts-serve.ps1` | start / `-Stop` / `-Status` / `-Engine` / `-Voice` |
+| Setup script | `scripts\setup-tts.ps1` | builds `env\tts\python` (Piper always; CPU torch only when OmniVoice is vendored) |
+| Voice download | `scripts\pull-tts-voice.ps1` → `piper.download_voices` | a few tens of MB, per voice |
+| Model download | `scripts\pull-tts-model.ps1` → `src\pull_tts_model.py` | OmniVoice only: ~3.04 GB, resumable, one connection at a time |
 | Alan glue | `src\alan/voice.py` — `say()`, `tts_ready()`, `for_speech()`, `describe_speech()` | readiness, the contract, the doctor row |
 
 Ports: **8182** here · whisper 8181 · cognee 8012 · browser 8022 · Ollama
@@ -28,24 +41,36 @@ Ports: **8182** here · whisper 8181 · cognee 8012 · browser 8022 · Ollama
 
 ## Setup (once)
 
+Piper, the default:
+
 ```powershell
-git clone https://github.com/k2-fsa/OmniVoice.git vendor\OmniVoice
-scripts\setup-tts.ps1          # builds env\tts\python (~10 min, CPU torch)
-scripts\pull-tts-model.ps1     # downloads the model (~3.04 GB, resumable)
-scripts\tts-serve.ps1          # load it and listen on 8182
+scripts\setup-tts.ps1           # builds env\tts\python, installs piper-tts
+scripts\pull-tts-voice.ps1      # downloads en_US-ryan-medium (~60 MB)
+scripts\tts-serve.ps1           # load it and listen on 8182
 ```
 
-Then turn it on in `config\settings.toml`:
+Then turn it on in `config\settings.toml` (this install already has it on):
 
 ```toml
 [voice]
 tts_enabled = true
 ```
 
-## Why the server is stdlib
+Adding OmniVoice, optionally, for a machine with a GPU:
 
-`src\tts_server.py` uses `http.server` and nothing else, and that is a
-deliberate choice rather than an omission. It has exactly two routes:
+```powershell
+git clone https://github.com/k2-fsa/OmniVoice.git vendor\OmniVoice
+scripts\setup-tts.ps1           # re-run: adds CPU torch + the OmniVoice package
+scripts\pull-tts-model.ps1      # downloads the model (~3.04 GB, resumable)
+scripts\tts-serve.ps1 -Stop
+scripts\tts-serve.ps1 -Engine omnivoice
+```
+
+## Why the servers are stdlib
+
+Both `src\tts_server.py` and `src\tts_server_piper.py` use `http.server` and
+nothing else, and that is a deliberate choice rather than an omission. Each has
+exactly two routes:
 
 | Route | Method | In | Out |
 |---|---|---|---|
@@ -55,12 +80,14 @@ deliberate choice rather than an omission. It has exactly two routes:
 A web framework would add a dependency tree to a machine with 3.9 GB of RAM to
 serve two routes whose heavy work has to be serialized under a lock anyway —
 two simultaneous generations on a 2-core box is not parallelism, it is just two
-sentences arriving later. The RAM belongs to the weights.
+sentences arriving later. The RAM belongs to the voice.
 
-`/ready` reports `load_error` rather than dying when the model fails to load,
+`/ready` reports `load_error` rather than dying when the engine fails to load,
 and `tts_ready()` treats "up but broken" as different from "not up": one says
 *start it*, the other says *read the log*. A silent crash would otherwise look
-exactly like a sidecar nobody started.
+exactly like a sidecar nobody started. The Piper server adds one message worth
+having: a missing voice names the file and the `pull-tts-voice.ps1 -Voice …`
+command that fetches it.
 
 ## The contract: `say()` never raises
 
@@ -91,6 +118,10 @@ worse than not hearing it.
 
 `synthesizer` and `player` are injectable keyword arguments, which is how the
 tests cover every row above without a sidecar, a model, or a sound card.
+
+The `instruct` field is OmniVoice's voice-design dial. Piper has no equivalent,
+so it accepts the field and ignores it — which is why `say()` can post the same
+body to either engine without knowing which one is listening.
 
 ## Speaking markdown, not reading it
 
@@ -134,7 +165,7 @@ Entry is probed first, and the two halves are treated differently:
 |---|---|
 | Microphone (whisper) | **Refuses to enter.** A mode that opens onto a dead microphone reads as a broken prompt when it is really a sidecar nobody started, so the note names `scripts\whisper-serve.ps1`. |
 | Speaker (TTS) | **Enters anyway**, voice in / text out, with a note saying so. A hands-free conversation that prints its answers is still a conversation. |
-| `tts_enabled = false` | **Enters anyway**, and says the replies will be printed. This is the configuration this machine is meant to run. |
+| `tts_enabled = false` | **Enters anyway**, and says the replies will be printed. |
 
 Getting out again is matched on an **exact normalized phrase**, not a prefix.
 Normalizing is what makes it forgiving — Whisper renders `Stop listening.` as
@@ -157,8 +188,8 @@ turn, not a failure.
 | | `voice.enabled` | `voice.tts_enabled` |
 |---|---|---|
 | Direction | speech → text | text → speech |
-| Engine | whisper-flow | OmniVoice |
-| Resident cost while up | ~150 MB | ~1.5–3.2 GB *(see Performance)* |
+| Engine | whisper-flow | Piper (or OmniVoice) |
+| Resident cost while up | ~150 MB | Piper: tens of MB · OmniVoice: ~1.5–3.2 GB |
 | Started by | `run.ps1 voice` | **by hand**, once |
 
 Neither implies the other. On a 4 GB machine an operator must be able to keep
@@ -166,16 +197,17 @@ the microphone and give up the voice, and `alan doctor` says exactly that — it
 reports `voice` and `speech` as **separate rows**, so it can say *hearing
 works, speech is off* rather than collapsing both into one verdict.
 
-`run.ps1` deliberately does **not** auto-start the TTS sidecar the way it
-starts whisper: loading the weights takes minutes, and a command whose whole
-point is immediacy should not open with a three-minute stall. Start it once and
-leave it running.
+`run.ps1` deliberately does **not** auto-start the TTS sidecar: even the small
+engine is resident while it is up, and a command whose whole point is immediacy
+should not open with a model load. Start it once and leave it running.
 
 ## Precision is a measurement, not a convention
 
+*(OmniVoice only — Piper loads a quantized ONNX voice and has no dtype knob.)*
+
 ```powershell
-$env:TTS_DTYPE = 'float16'   # or float32 (the default)
-scripts\tts-serve.ps1
+$env:TTS_DTYPE = 'float16'   # or float32
+scripts\tts-serve.ps1 -Engine omnivoice
 ```
 
 OmniVoice's own examples use `float16` because they target a GPU. That habit
@@ -197,14 +229,32 @@ steps is roughly proportional less compute, at some cost in audio quality.
 ## Performance
 
 Measured on this machine — Intel Core i3-6006U (2C/4T @ 2.0 GHz), 3,971 MB RAM,
-Intel HD Graphics 520, **no CUDA** — with
-`omnivoice_bench.py` (load time, RSS, generation time, audio length, RTF).
+Intel HD Graphics 520, **no CUDA**.
 
 > **RTF** (real-time factor) = generation seconds ÷ audio seconds. Below 1.0
 > means the sentence is ready before you would have finished hearing it. It is
 > the number that decides whether speaking is a feature or a demo.
 
-### Measured: `float16`, `num_step=32`
+### Piper: RTF ~0.2, the reason this ships on
+
+One ~7-second utterance (~115 characters), per voice, load once then warm:
+
+| Voice | Generation | Audio | RTF |
+|---|---|---|---|
+| `en_US-ryan-medium` (default) | 1.41 s | 6.54 s | **0.22** |
+| `en_US-joe-medium` | 1.43 s | 7.05 s | 0.20 |
+| `en_US-hfc_female-medium` | 1.42 s | 7.27 s | 0.20 |
+| `en_US-lessac-medium` | 1.39 s | 7.17 s | 0.19 |
+| `en_US-amy-medium` | 1.68 s | 8.93 s | 0.19 |
+| `en_GB-alba-medium` | 1.69 s | 7.96 s | 0.21 |
+
+Roughly **5× faster than real time**, so a reply is *shorter* arriving than it
+is to listen to. The `-high` voices (`en_US-ryan-high`, `en_US-lessac-high`) are
+more expressive at RTF ≈ 1.1–1.2 — still usable, just slightly behind real time
+— and are the ones to try if `-medium` sounds too plain. `data\tts\piper` is
+git-ignored, so trying a voice costs a download and nothing else.
+
+### OmniVoice: RTF > 356, the reason it is not the default
 
 | | |
 |---|---|
@@ -230,46 +280,42 @@ configuration problem:
 - **`TTS_NUM_STEP=16`** would roughly halve it. RTF ≈ 178 is still three
   orders of magnitude from a feature.
 
-**Consequence: `[voice] tts_enabled` ships `false` on this machine**, and
-should stay false until the hardware changes. Turning it on as shipped would
-stall every `ask` and every `voice` turn for eighteen minutes in exchange for a
-sentence — which is exactly the failure mode `say()` was written to prevent.
+So OmniVoice stays selectable and stays off by default, and **`tts_enabled`
+ships `true` because Piper answers the same port at RTF ~0.2.** One engine's
+ceiling is not the other's floor.
 
-### If you want speech on this machine
+## How this shipped
 
-The integration above is engine-agnostic by construction, which is the useful
-part. `say()` is a single HTTP POST; `for_speech()`, the doctor row, the config
-keys and all 32 tests are untouched by which server answers on 8182. Swapping
-the engine is:
+The integration was engine-agnostic by construction, which is the part that
+paid off. `say()` is a single HTTP POST; `for_speech()`, the doctor row, the
+config keys and every existing test are untouched by which server answers on
+8182. Swapping the engine was exactly the two steps this doc used to predict:
 
-1. a different server in `src\tts_server.py`'s place (or a second one on
-   another port, pointed at by `[voice] tts_base_url`), and
-2. `scripts\tts-serve.ps1` starting that instead.
+1. a second server in `src\tts_server_piper.py` (same protocol, a different
+   backend), and
+2. `scripts\tts-serve.ps1` starting that instead — now the `-Engine` flag.
 
-The obvious candidate is **Piper** — a purpose-built *CPU* text-to-speech whose
-published figures put it at RTF ≈ 0.05–0.2 on modest hardware, i.e. seconds
-rather than hours, with voices around 60 MB rather than 3 GB. It is a different
-class of engine: no voice design, no cross-lingual voice cloning, a fixed
-catalogue of voices — and it is the only class that fits this box. OmniVoice
-remains the right choice for a machine with a GPU.
+Nothing in `src\alan\voice.py` changed. That is the test of whether a seam is
+real: adding a whole engine behind it moved no client code.
 
 ## Lifecycle
 
 ```powershell
-scripts\tts-serve.ps1          # start (no-op if already up)
-scripts\tts-serve.ps1 -Status  # ready JSON, or the last lines of the error log
-scripts\tts-serve.ps1 -Stop
+scripts\tts-serve.ps1                            # start Piper (no-op if already up)
+scripts\tts-serve.ps1 -Voice en_US-amy-medium    # a different Piper voice
+scripts\tts-serve.ps1 -Engine omnivoice          # the GPU engine
+scripts\tts-serve.ps1 -Status                    # ready JSON, or the err log tail
+scripts\tts-serve.ps1 -Stop                      # only one engine can hold the port
 ```
 
 Logs live in `data\logs\tts\` (`tts.log`, `tts.err.log`, `tts.pid`). The start
-waits up to 240 s for readiness because loading 3 GB from disk on a cold cache
-is genuinely slow — a sidecar that reports "running" before its model is loaded
-would fail the first request for no useful reason.
+waits up to 240 s for readiness — OmniVoice needs it to load 3 GB from disk on a
+cold cache; Piper is resident in well under a second and simply returns early.
 
 `alan doctor` reports it:
 
 ```text
-✔    speech      ready on http://127.0.0.1:8182/ready (model …, float32, resident, protocol v1)
+✔    speech      ready on http://127.0.0.1:8182/ready (model en_US-ryan-medium, onnx, resident, protocol v1)
 ```
 
 ## Troubleshooting
@@ -277,8 +323,10 @@ would fail the first request for no useful reason.
 | Symptom | Cause | Fix |
 |---|---|---|
 | `speech configured - … start it with scripts\tts-serve.ps1` | sidecar not running | `scripts\tts-serve.ps1` |
-| `model failed to load: …` | weights missing, or too little RAM | `scripts\pull-tts-model.ps1`, then check `data\logs\tts\tts.err.log` |
+| `voice 'x' not found …` in `/ready` | voice not downloaded | `scripts\pull-tts-voice.ps1 -Voice x` |
+| `model failed to load: …` (OmniVoice) | weights missing, or too little RAM | `scripts\pull-tts-model.ps1`, then check `data\logs\tts\tts.err.log` |
 | `speaks protocol vN, Alan speaks v1` | sidecar and Alan out of step | update whichever is older |
-| First reply is much slower than the rest | model loading from disk on first use | start the sidecar before asking |
+| First reply is much slower than the rest | engine loading from disk on first use | start the sidecar before asking |
 | It synthesizes but you hear nothing | no output device, or `tts_play = false` | check `[voice] tts_play` and the system volume |
 | A reply is cut off at ~1200 characters | `for_speech()` caps to the sidecar's `MAX_CHARS` | expected: it is a cap, not a failure |
+| Started OmniVoice and it seems hung | RTF > 356: it is generating, not stuck | `-Stop`, then start Piper |
