@@ -169,7 +169,15 @@ def listen(
     try:
         result = runner(
             recorder_command(settings),
-            capture_output=True,
+            # stdout is the answer, so it is captured. stderr deliberately is
+            # *not*: the client writes "listening on device N ..." and every
+            # live partial there, and that is the only sign the mode is alive
+            # while the operator is still talking. capture_output=True captures
+            # both -- silencing all of it -- and a screen that shows nothing
+            # after "voice mode on" is indistinguishable from a hang, which is
+            # how a hands-free loop gets abandoned on its very first turn.
+            stdout=subprocess.PIPE,
+            stderr=None,
             text=True,
             # Client start + model already loaded + the utterance itself, with
             # room for a slow first transcription.
@@ -183,6 +191,10 @@ def listen(
     except OSError as exc:
         raise RuntimeError(f"could not run the voice client: {exc}") from exc
     if result.returncode != 0:
+        # stderr was inherited, so the client's own explanation has already
+        # been printed to the console by the time this raises. The tail is the
+        # compact summary that keeps the exception useful when nothing was
+        # captured -- and it degrades to the exit code rather than to None.
         detail = (result.stderr or "").strip().splitlines()
         tail = detail[-1] if detail else f"exit code {result.returncode}"
         raise RuntimeError(f"voice capture failed: {tail}")

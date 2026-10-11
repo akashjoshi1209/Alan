@@ -958,6 +958,11 @@ def chat(
             # Imported here because it is only paid for while the mode is on.
             from . import voice as voice_mod
 
+            # Printed from here rather than left to the client, because there
+            # is a gap before it says anything of its own -- interpreter start,
+            # model load, opening the socket. Silence across that gap reads as
+            # a hang, and a hang is what reaches for Ctrl+C.
+            console.print("[dim]listening...[/dim]")
             try:
                 heard = voice_mod.listen(voice_settings)
             except KeyboardInterrupt:

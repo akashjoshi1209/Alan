@@ -205,6 +205,37 @@ class ListenTest(unittest.TestCase):
         voice.listen(VoiceSettings(max_seconds=12.0), runner=runner)
         self.assertEqual(seen["timeout"], 72.0)
 
+    def test_stderr_is_left_attached_so_partials_reach_the_operator(self) -> None:
+        """The client writes "listening on device N ..." and every live partial
+        to stderr. Capturing it -- as capture_output=True does -- silences all
+        of it, and a screen that shows nothing after "voice mode on" is
+        indistinguishable from a hang. That is how a hands-free loop got
+        abandoned on its very first turn in practice, so the routing is
+        asserted rather than left to a docstring nobody can run.
+        """
+        seen: dict = {}
+
+        def runner(argv, **kwargs):
+            seen.update(kwargs)
+            return subprocess.CompletedProcess(argv, 0, stdout="", stderr=None)
+
+        voice.listen(self._settings(), runner=runner)
+        self.assertIsNone(seen.get("stderr"), "stderr must be inherited, not piped")
+        self.assertIsNotNone(seen.get("stdout"), "stdout is the transcript, so it is captured")
+        self.assertNotIn("capture_output", seen)
+
+    def test_a_failure_still_summarises_when_stderr_was_inherited(self) -> None:
+        """With stderr inherited the client's own explanation has already
+        reached the console, so the exception is a compact summary. It must
+        still *be* one: result.stderr is None here, and a naive tail-of-lines
+        would slice into nothing."""
+        def runner(argv, **_kwargs):
+            return subprocess.CompletedProcess(argv, 2, stdout="", stderr=None)
+
+        with self.assertRaises(RuntimeError) as caught:
+            voice.listen(self._settings(), runner=runner)
+        self.assertIn("exit code 2", str(caught.exception))
+
 
 class SettingsTest(unittest.TestCase):
     def test_voice_settings_load_from_the_install(self) -> None:
