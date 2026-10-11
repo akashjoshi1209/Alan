@@ -152,6 +152,7 @@ everything:
 /approve ID           let a waiting task run
 /reject ID            pause it
 /telegram             approval-bridge state
+/voicemode            speak your question, hear the answer
 ```
 
 ---
@@ -329,6 +330,21 @@ full measurement and what that swap would take — the short version is
 - **Not auto-started.** `run.ps1` starts whisper for `voice` but not this: a
   command whose point is immediacy should not open with a three-minute model
   load. `scripts\tts-serve.ps1` starts it once, and it stays up.
+
+Inside chat, `/voicemode` joins the two halves into a hands-free loop: it
+switches the prompt from the keyboard to the microphone and speaks each reply,
+then hands you back the keyboard when you say *"stop listening"* (or press
+Ctrl+C once — that ends the mode, not the session). It is a toggle on the
+ordinary chat loop rather than a session of its own, so history, Tab completion
+and typing all keep working across the switch.
+
+Listening gates entry, because a mode that opens onto a dead microphone reads
+as a broken prompt when it is really a sidecar nobody started. Speaking being
+down does not: you get voice in and text out, with a note saying so, because a
+hands-free conversation that prints its answers is still a conversation. Every
+transcript is echoed before the question is built on it, so a mis-hearing is
+checkable rather than discovered in the reply — and with `tts_enabled` off the
+mode still works, which is the fastest way to use voice input today.
 
 ---
 

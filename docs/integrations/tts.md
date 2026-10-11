@@ -79,7 +79,15 @@ unavailable. Every path returns a reason instead:
 | Synthesis returned 0 bytes | `(False, …)` | "no audio" |
 | No audio device | `(False, …)` | the playback error |
 | `tts_play = false` | `(True, …)` | synthesized only — a health check needing no speaker |
-| Success | `(True, …)` | bytes said |
+| Success | `(True, …)` | bytes said **and the seconds taken** |
+
+The success notes carry the elapsed wall time — `said 48213 bytes in 0.8s` —
+measured on Alan's side rather than reported by the sidecar. That is deliberate:
+it makes the cost of a spoken reply visible for *whatever* engine answers on
+`tts_base_url`, which is the number that decides whether speech is a feature or
+a demo on a given machine. A reply cut off at the sidecar's 1200-character cap
+says so too, because hearing three quarters of an answer without being told is
+worse than not hearing it.
 
 `synthesizer` and `player` are injectable keyword arguments, which is how the
 tests cover every row above without a sidecar, a model, or a sound card.
@@ -108,6 +116,41 @@ characters, the sidecar's own limit.
 It is a separate, separately-tested function because it is the part that can
 quietly ruin **every** spoken reply while looking fine on screen. Synthesis is
 one HTTP call; this is the fiddly half.
+
+## `/voicemode`: the hands-free loop
+
+`say()` alone makes a typed session audible. `/voicemode` inside chat is what
+joins the two halves into a conversation: the prompt switches from the keyboard
+to the microphone, and each reply is spoken.
+
+It is a **toggle on the ordinary chat loop**, not a nested session. That is the
+deliberate shape — the conversation, its history, Tab completion and the
+keyboard all keep working across the switch, and leaving is a word away rather
+than something you climb out of.
+
+Entry is probed first, and the two halves are treated differently:
+
+| | Unavailable at `/voicemode` |
+|---|---|
+| Microphone (whisper) | **Refuses to enter.** A mode that opens onto a dead microphone reads as a broken prompt when it is really a sidecar nobody started, so the note names `scripts\whisper-serve.ps1`. |
+| Speaker (TTS) | **Enters anyway**, voice in / text out, with a note saying so. A hands-free conversation that prints its answers is still a conversation. |
+| `tts_enabled = false` | **Enters anyway**, and says the replies will be printed. This is the configuration this machine is meant to run. |
+
+Getting out again is matched on an **exact normalized phrase**, not a prefix.
+Normalizing is what makes it forgiving — Whisper renders `Stop listening.` as
+often as not, and a command you have to say exactly right is one you will say
+wrong at the moment you want it most. But `"stop listening to that podcast"`
+exiting the mode would be a silent, confusing failure, while a missed rephrasing
+costs one Ctrl+C, which always works. So the asymmetry is deliberate: it errs
+toward staying in.
+
+Ctrl+C ends the *mode*, not the session — the recorder is the thing that was
+interrupted, so treating it as "quit chat" would punish the wrong gesture.
+
+Every transcript is echoed as `you>` **before** the question is built on it, so
+a mis-hearing is checkable rather than discovered in the reply. Silence
+re-arms the listener instead of ending the mode: a pause is how you finish a
+turn, not a failure.
 
 ## Two switches, because the two halves cost differently
 
