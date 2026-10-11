@@ -42,6 +42,7 @@ import json
 import re
 import subprocess
 import tempfile
+import time
 from pathlib import Path
 from typing import Callable, Sequence
 from urllib.error import URLError
@@ -331,6 +332,11 @@ def say(
     synthesize = synthesizer or _synthesize
     play = player or _play
 
+    # Timed here rather than trusted from the sidecar, so the cost of a spoken
+    # reply is reported for *whatever* engine answers on tts_base_url. That is
+    # the number that decides whether this is a feature or a demo, and an
+    # operator should see it without reading logs.
+    started = time.perf_counter()
     try:
         wav = synthesize(settings, spoken)
     except (URLError, OSError, ValueError, TimeoutError) as exc:
@@ -339,19 +345,28 @@ def say(
             f"synthesis failed at {settings.tts_base_url} ({reason}) - "
             "start it with scripts\\tts-serve.ps1; the answer above stands"
         )
+    elapsed = time.perf_counter() - started
     if not wav:
         return False, "sidecar returned no audio"
+
+    # A capped string is a shortened answer, and hearing three quarters of a
+    # reply without being told is worse than not hearing it. for_speech() caps
+    # to the sidecar's MAX_CHARS, so equality is exactly "the cap was hit".
+    shortened = " (answer shortened to fit)" if len(spoken) >= 1200 else ""
 
     if not settings.tts_play:
         # Synthesized but deliberately not played: a health check that proves
         # the whole path works on a box with no speaker, without needing one.
-        return True, f"synthesized {len(wav)} bytes (\\[voice] tts_play = false)"
+        return True, (
+            f"synthesized {len(wav)} bytes in {elapsed:.1f}s"
+            f"{shortened} (\\[voice] tts_play = false)"
+        )
 
     try:
         play(wav)
     except (OSError, RuntimeError, ImportError) as exc:
         return False, f"audio came back but could not be played: {exc}"
-    return True, f"said {len(wav)} bytes"
+    return True, f"said {len(wav)} bytes in {elapsed:.1f}s{shortened}"
 
 
 def describe_speech(settings: VoiceSettings) -> dict:
@@ -378,6 +393,71 @@ def describe_speech(settings: VoiceSettings) -> dict:
         "reachable": reachable,
         "note": text,
     }
+
+
+#: What you can say to leave voice mode without reaching for the keyboard.
+#: Spoken rather than typed because the whole point of the mode is that your
+#: hands are not on it -- Ctrl+C is the other way out, and it drops back to the
+#: keyboard rather than ending the session.
+VOICE_EXIT_PHRASES: tuple[str, ...] = (
+    "stop listening",
+    "stop voice mode",
+    "exit voice mode",
+    "voice mode off",
+    "voice off",
+    "quit voice mode",
+    "leave voice mode",
+)
+
+
+def is_exit_phrase(text: str) -> bool:
+    """Does this transcript mean "leave voice mode"?
+
+    Matched against a normalized *exact* phrase rather than by equality on the
+    raw string, and rather than by prefix. Normalizing is what makes it
+    forgiving: Whisper renders "Stop listening." as often as not, and a command
+    you have to say exactly right is one you will say wrong at the moment you
+    want it most.
+
+    Not prefix matching, though, because the cost is asymmetric. "stop listening
+    to that podcast" exiting the mode is a silent, confusing failure, while
+    failing to match a rephrasing costs one Ctrl+C -- which is always available
+    and always works. So it errs toward staying in the mode.
+    """
+    normalized = re.sub(r"[^a-z ]+", " ", (text or "").lower()).strip()
+    normalized = re.sub(r"\s+", " ", normalized)
+    return normalized in VOICE_EXIT_PHRASES
+
+
+def mode_status(settings: VoiceSettings) -> tuple[bool, str]:
+    """Whether voice mode can start, and one line saying what it will do.
+
+    Checked before entering rather than discovered mid-sentence. A mode that
+    opens onto a dead microphone reads as a broken prompt when it is really a
+    sidecar nobody started, and the fix is known before the first word is
+    spoken -- so the half that matters (listening) gates entry and the half
+    that does not (speaking) is reported and worked around.
+
+    Speaking being unavailable is therefore *not* a reason to refuse: a
+    hands-free conversation that prints its answers is still a conversation,
+    and the note says so rather than leaving the operator wondering why the
+    room went quiet.
+    """
+    listen_ok, listen_note = ready(settings)
+    if not listen_ok:
+        return False, (
+            f"cannot listen: {listen_note} - "
+            "start it with scripts\\whisper-serve.ps1"
+        )
+    if not settings.tts_enabled:
+        return True, (
+            "listening; replies will be printed, not spoken "
+            "(set \\[voice] tts_enabled = true to hear them)"
+        )
+    speak_ok, speak_note = tts_ready(settings)
+    if speak_ok:
+        return True, f"listening and speaking; {speak_note}"
+    return True, f"listening; speaking unavailable: {speak_note}"
 
 
 def describe(settings: VoiceSettings) -> dict:

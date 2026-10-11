@@ -164,6 +164,7 @@ _HELP_SECTIONS = [
         ("/sessions", "list saved sessions"),
         ("/load NAME", "load a saved session"),
         ("/provider", "show the backend in use"),
+        ("/voicemode", "speak your question, hear the answer (Ctrl+C to stop)"),
         ("/exit", "quit (or Ctrl+C)"),
     ]),
     ("memory", [
@@ -760,13 +761,17 @@ def _confirm_on_console(request: PermissionRequest) -> bool:
     return str(answer).strip().lower() in {"y", "yes"}
 
 
-def _speak(reply: str) -> None:
+def _speak(reply: str, *, announce: bool = False) -> None:
     """Speak a finished reply, if the operator asked for speech.
 
     Deliberately after the answer is on screen and deliberately best-effort:
     a speaker that is off, down or absent costs the sound and never the turn
-    that already succeeded. The note is printed dim so a failure is visible
-    without looking like the thing that went wrong.
+    that already succeeded.
+
+    ``announce`` prints the note on success as well as failure. In voice mode
+    the room going quiet is otherwise ambiguous -- is it thinking, or did it
+    fail? -- so a spoken turn says what it said and how long it took. A typed
+    ``ask`` keeps quiet on success because nothing there needs confirming.
     """
     if not reply:
         return
@@ -776,7 +781,7 @@ def _speak(reply: str) -> None:
     from . import voice as voice_mod
 
     spoken, note = voice_mod.say(settings.voice, reply)
-    if not spoken:
+    if announce or not spoken:
         console.print(f"[dim]{note}[/dim]")
 
 
@@ -939,14 +944,53 @@ def chat(
     # moment -- after a reply, before the next prompt -- never mid-prompt.
     feed = ChatFeed(alan.runtime.bus)
 
+    # Voice mode is a toggle on this loop rather than a loop of its own. That
+    # is deliberate: the conversation, its history, Tab completion and the
+    # keyboard all keep working across the switch, and leaving is a word away
+    # rather than a nested session you have to climb out of.
+    voice_on = False
+    voice_settings = load_settings().voice
+
     while True:
         for line in feed.drain():
             console.print(f"[dim]{line}[/dim]")
-        try:
-            user = reader.read()
-        except (EOFError, KeyboardInterrupt):
-            console.print()
-            break
+        if voice_on:
+            # Imported here because it is only paid for while the mode is on.
+            from . import voice as voice_mod
+
+            try:
+                heard = voice_mod.listen(voice_settings)
+            except KeyboardInterrupt:
+                # One Ctrl+C drops back to typing; it ends the mode, not the
+                # session. The recorder is the thing that was interrupted, so
+                # treating this as "quit chat" would punish the wrong gesture.
+                voice_on = False
+                console.print("[dim]voice mode off - typing again[/dim]")
+                continue
+            except RuntimeError as exc:
+                # A sidecar that died mid-session takes the mode with it, not
+                # the conversation: this is a mode, not the only way in.
+                console.print(f"[red]{exc}[/red]")
+                voice_on = False
+                continue
+            if not heard:
+                # Heard nothing: stay in the mode and listen again. Silences
+                # are normal -- a pause is how you end a turn, not a failure.
+                continue
+            # Echoed so trust is checkable: if Whisper heard the wrong words,
+            # the operator sees it before the answer is built on them.
+            console.print(f"[bold green]you>[/bold green] {heard}")
+            if voice_mod.is_exit_phrase(heard):
+                voice_on = False
+                console.print("[dim]voice mode off[/dim]")
+                continue
+            user = heard
+        else:
+            try:
+                user = reader.read()
+            except (EOFError, KeyboardInterrupt):
+                console.print()
+                break
         if not user:
             continue
         if user in ("/exit", "/quit", ":q"):
@@ -960,6 +1004,32 @@ def chat(
             continue
         if user == "/provider":
             console.print(f"[dim]{alan.provider.describe()}[/dim]")
+            continue
+        if user == "/voicemode":
+            # Deliberately no /voice alias: `alan voice` is already a top-level
+            # command with different behaviour (one ask, then quit), and a
+            # second spelling that differs by three letters would be a trap.
+            from . import voice as voice_mod
+
+            if voice_on:
+                voice_on = False
+                console.print("[dim]voice mode off - typing again[/dim]")
+                continue
+            # Probed before entering, not discovered on the first word: a mode
+            # that opens onto a dead microphone reads as a broken prompt when
+            # it is really a sidecar nobody started. Re-read here so an edit
+            # to settings.toml takes effect at this boundary rather than
+            # needing a whole new chat session.
+            voice_settings = load_settings().voice
+            can_start, note = voice_mod.mode_status(voice_settings)
+            if not can_start:
+                console.print(f"[red]{note}[/red]")
+                continue
+            voice_on = True
+            console.print(f"[green]voice mode on[/green] [dim]- {note}[/dim]")
+            console.print(
+                '[dim]speak; say "stop listening", or Ctrl+C, to type again[/dim]'
+            )
             continue
         if user == "/save":
             path = alan.save_session()
@@ -1062,11 +1132,17 @@ def chat(
             continue
 
         try:
-            _draw_reply(alan.stream(user))
+            reply = _draw_reply(alan.stream(user))
         except ProviderError as exc:
             console.print(f"\n[red]{exc}[/red]\n")
         except Exception as exc:  # one bad tool/model call must not end the chat
             console.print(f"\n[red]error: {type(exc).__name__}: {exc}[/red]\n")
+        else:
+            # Announced rather than silent: in a hands-free turn the room going
+            # quiet is ambiguous between "still thinking" and "it failed", and
+            # the note says which, with the time it took.
+            if voice_on:
+                _speak(reply, announce=True)
 
     reader.save()
     alan.stop_scheduler()

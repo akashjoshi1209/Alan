@@ -14,6 +14,7 @@ Three things are worth proving here, and only the third needs a server:
 from __future__ import annotations
 
 import json
+import re
 import sys
 import tempfile
 import threading
@@ -372,6 +373,149 @@ class ConfigTest(unittest.TestCase):
         settings = self._load("[memory]\nbackend = \"local\"\n").voice
         self.assertFalse(settings.tts_enabled)
         self.assertEqual(settings.tts_base_url, "http://127.0.0.1:8182")
+
+
+class VoiceModeTest(unittest.TestCase):
+    """/voicemode: what gates entry, and what gets you out again."""
+
+    def test_cannot_enter_without_the_microphone_sidecar(self) -> None:
+        """Listening is the half that gates entry; the note names the fix."""
+        with mock.patch.object(voice, "ready", lambda _s: (False, "not reachable")):
+            ok, note = voice.mode_status(
+                VoiceSettings(enabled=True, tts_enabled=True)
+            )
+        self.assertFalse(ok)
+        self.assertIn("cannot listen", note)
+        self.assertIn("whisper-serve.ps1", note)
+
+    def test_speaking_unavailable_still_allows_the_mode(self) -> None:
+        """The key design call: a hands-free conversation that prints its
+        answers is still a conversation. Refusing here would trade a working
+        voice input for a speaker that happens to be down."""
+        with mock.patch.object(voice, "ready", lambda _s: (True, "ready")), \
+                mock.patch.object(voice, "tts_ready", lambda _s: (False, "down")):
+            ok, note = voice.mode_status(
+                VoiceSettings(enabled=True, tts_enabled=True)
+            )
+        self.assertTrue(ok)
+        self.assertIn("listening; speaking unavailable", note)
+
+    def test_speech_disabled_says_so_rather_than_staying_silent(self) -> None:
+        with mock.patch.object(voice, "ready", lambda _s: (True, "ready")):
+            ok, note = voice.mode_status(
+                VoiceSettings(enabled=True, tts_enabled=False)
+            )
+        self.assertTrue(ok)
+        self.assertIn("printed, not spoken", note)
+        self.assertIn("tts_enabled", note)
+
+    def test_both_sides_up_reports_a_full_voice_loop(self) -> None:
+        with mock.patch.object(voice, "ready", lambda _s: (True, "ready")), \
+                mock.patch.object(voice, "tts_ready", lambda _s: (True, "ready 8182")):
+            ok, note = voice.mode_status(
+                VoiceSettings(enabled=True, tts_enabled=True)
+            )
+        self.assertTrue(ok)
+        self.assertIn("listening and speaking", note)
+        self.assertIn("8182", note)
+
+
+class ExitPhraseTest(unittest.TestCase):
+    """Leaving has to work on the first try, in the moment you want it."""
+
+    def test_the_documented_phrases_exit(self) -> None:
+        for phrase in voice.VOICE_EXIT_PHRASES:
+            with self.subTest(phrase=phrase):
+                self.assertTrue(voice.is_exit_phrase(phrase))
+
+    def test_punctuation_and_case_from_a_transcriber_do_not_break_it(self) -> None:
+        """Whisper renders 'Stop listening.' as often as not. A command you
+        have to say exactly right is one you will say wrong when it matters."""
+        self.assertTrue(voice.is_exit_phrase("Stop listening."))
+        self.assertTrue(voice.is_exit_phrase("  STOP LISTENING  "))
+
+    def test_something_that_merely_contains_a_phrase_does_not_exit(self) -> None:
+        """'Stop listening to that podcast' is a question about a podcast."""
+        self.assertFalse(voice.is_exit_phrase("stop listening to that podcast"))
+        self.assertFalse(voice.is_exit_phrase("please exit voice mode later"))
+
+    def test_an_ordinary_question_keeps_the_mode_open(self) -> None:
+        for question in (
+            "what time is it in tokyo",
+            "exit this program",       # 'exit' alone is not a listed phrase
+            "voice mode on please",    # enabling, not disabling
+            "",
+        ):
+            with self.subTest(question=question):
+                self.assertFalse(voice.is_exit_phrase(question))
+
+
+class SayCostTest(unittest.TestCase):
+    """The note reports what a spoken reply cost -- for any engine on the port."""
+
+    def test_the_note_carries_the_synthesis_time(self) -> None:
+        def slow(_settings, _text):
+            import time as time_mod
+
+            time_mod.sleep(0.05)
+            return b"RIFF" * 8
+
+        ok, note = voice.say(
+            VoiceSettings(tts_enabled=True, tts_play=False), "hello",
+            synthesizer=slow,
+        )
+        self.assertTrue(ok, note)
+        # Asserted as a shape, not a literal: the exact figure depends on the
+        # machine and on what else is running, which is the whole point of
+        # reporting it rather than hard-coding it.
+        self.assertRegex(note, r"in \d+\.\d+s")
+        self.assertGreater(float(re.search(r"in (\d+\.\d+)s", note).group(1)), 0.04)
+
+    def test_a_capped_reply_says_it_was_shortened(self) -> None:
+        """Hearing three quarters of an answer without being told is worse
+        than not hearing it -- the cap is real and should be visible."""
+        ok, note = voice.say(
+            VoiceSettings(tts_enabled=True, tts_play=False), "word " * 2000,
+            synthesizer=lambda *_: b"RIFF",
+        )
+        self.assertTrue(ok, note)
+        self.assertIn("shortened", note)
+
+    def test_an_uncapped_reply_does_not_claim_to_be_shortened(self) -> None:
+        ok, note = voice.say(
+            VoiceSettings(tts_enabled=True, tts_play=False), "short answer",
+            synthesizer=lambda *_: b"RIFF",
+        )
+        self.assertTrue(ok, note)
+        self.assertNotIn("shortened", note)
+
+
+class VoicemodeDiscoverabilityTest(unittest.TestCase):
+    """/voicemode has to be findable. /help is where you look and Tab is how
+    you type it, and both read _HELP_SECTIONS -- so the same single row feeds
+    them, and the same single omission would remove it from both silently."""
+
+    def _rows(self) -> list:
+        from alan import cli
+
+        return [c for _section, entries in cli._HELP_SECTIONS for c, _d in entries]
+
+    def test_it_is_listed_in_help(self) -> None:
+        self.assertIn("/voicemode", self._rows())
+
+    def test_tab_completes_it(self) -> None:
+        from alan import cli
+
+        self.assertIn("/voicemode", cli._completion_options())
+
+    def test_it_is_the_only_spelling(self) -> None:
+        """No /voice alias: `alan voice` is already a top-level command that
+        does something else (one ask, then quit), and a second chat spelling
+        differing by three letters would be a trap rather than a convenience."""
+        from alan import cli
+
+        self.assertNotIn("/voice", self._rows())
+        self.assertNotIn("/voice", cli._completion_options())
 
 
 if __name__ == "__main__":
