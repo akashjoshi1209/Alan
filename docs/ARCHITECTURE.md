@@ -320,6 +320,53 @@ The flow is deliberately one-way:
 voice` starts the sidecar for that command only. Details, in
 [whisper.md](integrations/whisper.md).
 
+### The speech-out sidecar
+
+Hearing without speaking is half a channel, so [OmniVoice](https://github.com/
+k2-fsa/OmniVoice) (k2-fsa, Apache-2.0) answers Alan's replies on
+`127.0.0.1:8182` from a **fourth** embeddable Python at `env\tts\python`. It is
+the same ADR-003 rule with the arrow reversed:
+
+- **`src\tts_server.py` is a server Alan wrote, not one OmniVoice ships.** The
+  upstream provides a Gradio demo and a CLI — neither is an API a client can
+  call. The server is deliberately stdlib-only (`http.server`, two endpoints):
+  on a 4 GB machine the allowance belongs to model weights, and the heavy work
+  must be serialized under a lock regardless, so a web framework would buy
+  nothing.
+- **`say()` never raises.** It sits after an answer already rendered to the
+  terminal, so the only thing a failure can usefully cost is the sound. It
+  returns `(spoken, note)`; a sidecar that is down produces a dim note naming
+  `scripts\tts-serve.ps1`, and the turn stands.
+- **Two switches, because the two halves cost differently.** Whisper is a
+  resident ~150 MB; OmniVoice is ~1.5–3.2 GB depending on precision, existing
+  in RAM only while its sidecar runs. `[voice] enabled` and
+  `[voice] tts_enabled` therefore do not imply each other — an operator can
+  keep the microphone and give up the voice.
+- **The reply is stripped of markup before it is spoken.** `for_speech()` removes
+  fences, emphasis, links, list markers and table gutters, because reading
+  markup aloud ("hash hash heading asterisk asterisk") ruins every reply while
+  being invisible on screen. It is its own tested function for that reason:
+  synthesis is one HTTP call, this is the part that can quietly break all of
+  them.
+- **Precision is a measurement, not a convention.** The upstream examples use
+  `float16` because they target a GPU. CPU kernels in PyTorch are optimized for
+  `float32` and `float16` is emulated there, so the GPU habit inverts on a
+  machine with no CUDA — and `float32` doubles the working set, which on 3.9 GB
+  of RAM turns into page-file traffic instead of arithmetic. `float16` is
+  therefore the default here because it *measured* better (170.8 s load,
+  weights resident), not because it is conventional.
+- **The measurement is recorded, and it says no.** On this i3-6006U, one
+  3-second sentence had not finished generating after 1,069 seconds — RTF above
+  356, against the 0.025 the upstream quotes for an H100. So `[voice]
+  tts_enabled` ships `false` rather than shipping a switch that stalls every
+  turn for eighteen minutes. The integration is kept, engine-agnostic by
+  construction: `say()` is one POST, and the markup stripping, doctor row and
+  config keys are indifferent to which server answers on 8182.
+
+`alan doctor` reports it as its own row (`speech: ready|configured|off`), kept
+separate from `voice` so it can say *hearing works, speech is off* rather than
+collapsing both into one verdict.
+
 ### Opening applications and websites
 
 "Open YouTube" means *put it on my screen*. `web.open` means *tell me what this

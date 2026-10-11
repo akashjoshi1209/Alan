@@ -132,6 +132,9 @@ knowing:
 | `scripts\whisper-serve.ps1` | Start/stop the speech sidecar |
 | `scripts\setup-whisper.ps1` | Build the speech sidecar environment (once) |
 | `scripts\pull-stt-model.ps1` | Download an STT model for the sidecar (`-List` to see installed) |
+| `scripts\tts-serve.ps1` | Start/stop the speech-*output* sidecar (Alan's voice) |
+| `scripts\setup-tts.ps1` | Build the speech-output sidecar environment (once) |
+| `scripts\pull-tts-model.ps1` | Download the text-to-speech model (~3 GB, resumable) |
 
 Inside `alan chat` — the prompt has **up-arrow history** (kept between
 sessions), **Tab completion** of every command below, and replies **render as
@@ -286,6 +289,46 @@ machine** — no cloud API, no key, nothing to sign up for.
   command only. The sidecar preloads your model at startup, so
   the first question isn't the one that waits. Details:
   [docs/integrations/whisper.md](docs/integrations/whisper.md).
+
+### Talking back
+
+Hearing without speaking is half a channel, so Alan can also say its replies
+out loud. [OmniVoice](https://github.com/k2-fsa/OmniVoice) (k2-fsa,
+Apache-2.0) — a 613M-parameter model with *voice design*, where you describe
+how Alan should sound rather than picking a catalogue voice — runs locally on
+`127.0.0.1:8182`. The reply is stripped of markdown first, because "hash hash
+heading asterisk asterisk" is what reading markup aloud actually sounds like.
+
+```toml
+[voice]
+tts_enabled = true        # off by default — see below
+tts_instruct = ""         # e.g. "low pitch, british accent"; empty = model picks
+```
+
+**It ships off, and on this machine it should stay off.** This is a 2-core
+i3-6006U with no CUDA, and it was measured rather than guessed: loading the
+weights takes **170.8 s**, and one 3-second sentence had not finished
+generating after **1,069 s** — an RTF above 356, against the 0.025 OmniVoice
+quotes for an H100. Turning it on would stall every turn for eighteen minutes
+to say one sentence.
+
+The integration is real and complete, though, and it was built to be
+indifferent to which engine answers: `say()` is a single HTTP POST, so swapping
+in a CPU-sized engine is one config key (`[voice] tts_base_url`) plus a
+different server. [docs/integrations/tts.md](docs/integrations/tts.md) has the
+full measurement and what that swap would take — the short version is
+[Piper](https://github.com/rhasspy/piper), ~60 MB voices at RTF ≈ 0.1.
+
+- **It never breaks a turn.** Speech sits after an answer already on screen, so
+  `say()` returns a reason rather than raising: a sidecar that is down costs
+  the sound and never the answer.
+- **Two switches, because the halves cost differently.** `enabled` (whisper,
+  ~150 MB resident) and `tts_enabled` (~1.5 GB) do not imply each other, and
+  `alan doctor` reports them as separate rows — it can say *hearing works,
+  speech is off*.
+- **Not auto-started.** `run.ps1` starts whisper for `voice` but not this: a
+  command whose point is immediacy should not open with a three-minute model
+  load. `scripts\tts-serve.ps1` starts it once, and it stays up.
 
 ---
 
