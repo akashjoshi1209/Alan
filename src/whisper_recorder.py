@@ -112,10 +112,16 @@ class SilenceDetector:
         self.max_seconds = max_seconds
         self.speech_seen = False
         self.silent_ms = 0.0
+        self.peak_seen = 0
         self.started = time.monotonic()
 
     def feed(self, frame_peak: int, frame_ms: float) -> bool:
         """Feed one frame; True means stop recording."""
+        # Recorded even below the threshold: when nothing is ever transcribed,
+        # the loudest frame seen is the difference between "the operator said
+        # nothing" and "the microphone is muted", and only one of those is a
+        # problem worth sending an operator into Windows sound settings for.
+        self.peak_seen = max(self.peak_seen, frame_peak)
         if frame_peak >= self.threshold:
             self.speech_seen = True
             self.silent_ms = 0.0
@@ -279,6 +285,7 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
 
     finals: list[dict] = []
     last_partial = ""
+    connection_lost: Optional[str] = None
     try:
         ws.send(json.dumps(start_message(args.model, args.language, args.prompt)))
 
@@ -325,6 +332,13 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
                 finals.append(message)
     except KeyboardInterrupt:  # operator aborted mid-phrase
         print("\naborted.", file=sys.stderr)
+    except (OSError, websocket.WebSocketException) as exc:
+        # A socket that dies mid-utterance is the sidecar's problem, not the
+        # microphone's, and it must not escape as an unhandled traceback out
+        # of a chat mode -- that reads as Alan breaking rather than as a
+        # connection dropping, and it takes the whole mode down with it.
+        connection_lost = f"{type(exc).__name__}: {exc}"
+        print(f"\nsidecar connection dropped: {connection_lost}", file=sys.stderr)
     finally:
         stop.set()
         try:
@@ -335,11 +349,33 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         stream.close()
         audio.terminate()
 
+    if connection_lost is not None:
+        # Anything transcribed before the drop is not trustworthy -- the
+        # stream stopped mid-utterance -- and reporting it as silence would
+        # blame the microphone for a sidecar that went away.
+        return EXIT_SIDECAR
+
     transcript = final_texts(finals)
     if transcript:
         print(transcript)
     elif not detector.speech_seen:
-        print("heard nothing (no speech above the silence threshold)", file=sys.stderr)
+        # "No speech above the threshold" is true but useless: it is equally
+        # consistent with a quiet room and with a muted microphone, and only
+        # one of those is worth an operator's time. The loudest frame seen
+        # separates them.
+        print(
+            f"heard nothing: the loudest frame reached {detector.peak_seen}, "
+            f"and the threshold is {detector.threshold}",
+            file=sys.stderr,
+        )
+        if detector.peak_seen < detector.threshold // 2:
+            print(
+                "  that is room noise, not speech -- the microphone in use is "
+                "likely muted, too quiet, or not the one you are speaking "
+                "into.\n  check Windows Sound settings > Recording, or run "
+                "scripts\\voice-levels.ps1 to see which devices carry signal.",
+                file=sys.stderr,
+            )
     return EXIT_OK
 
 

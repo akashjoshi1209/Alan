@@ -361,6 +361,14 @@ class VoiceSettings:
     max_seconds: float = 60.0
     #: Peak PCM amplitude that counts as speech rather than room noise.
     threshold: int = 500
+    #: PyAudio input device index; -1 asks Windows for its default recording
+    #: device. That default is only right if it is the microphone actually in
+    #: use. On a machine with several front-panel jacks and paired Bluetooth
+    #: headsets it is frequently a *silent* one -- measured here at a peak of
+    #: 54 against a threshold of 500, so it records the full max_seconds and
+    #: reports "heard nothing" while a working device sits unused. Set this to
+    #: a device that reports signal; scripts\voice-levels.ps1 lists them.
+    device: int = -1
     #: Seconds to wait for GET /ready before reporting the sidecar down.
     timeout: float = 3.0
 
@@ -757,6 +765,10 @@ def _apply_tables(settings: Settings, raw: dict) -> Settings:
         v.silence_ms = max(200, min(int(voice.get("silence_ms", v.silence_ms)), 10000))
         v.max_seconds = max(5.0, min(float(voice.get("max_seconds", v.max_seconds)), 600.0))
         v.threshold = max(1, min(int(voice.get("threshold", v.threshold)), 32767))
+        # -1 means "whatever Windows calls the default input device". Anything
+        # below that is a typo rather than a choice, and handing it to PyAudio
+        # produces an obscure failure at record time, so it is floored here.
+        v.device = max(-1, int(voice.get("device", v.device)))
         v.timeout = float(voice.get("timeout", v.timeout))
         # Speech output. The floor of 10s on tts_timeout is not a preference:
         # below it, a session's first answer would race the model's own load

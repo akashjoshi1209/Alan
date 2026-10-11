@@ -283,6 +283,16 @@ max_seconds = 60.0
 # Peak PCM amplitude that counts as speech. Raise it in a noisy room.
 threshold = 500
 
+# Which microphone. -1 means "whatever Windows calls the default recording
+# device", which is only right if that default is the one you speak into.
+#
+# Measured on this machine: the default input peaked at 54 against a threshold
+# of 500, so voice input recorded for the full 60s and reported "heard nothing"
+# while other devices carried real signal. Several front-panel jacks and paired
+# Bluetooth headsets make that common. Run scripts\voice-levels.ps1 -All while
+# speaking, then set the index it reports here.
+device = -1
+
 # Speech output: the other direction of the same channel.
 #
 # Alan hears with whisper-flow (above) and answers out loud, locally, so a

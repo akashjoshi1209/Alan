@@ -79,6 +79,27 @@ def ws_url(settings: VoiceSettings) -> str:
     ) + "/ws"
 
 
+def _sidecar_listening(base_url: str) -> bool:
+    """Is anything accepting connections at ``base_url``'s host:port?
+
+    A plain, deliberately short TCP connect. A closed loopback port is dropped
+    by the Windows firewall rather than refused, so an HTTP request against it
+    waits out a ~2 s SYN retransmit before it can fail -- and speech output is
+    attempted on *every* reply while ``tts_enabled`` is on, which added two
+    seconds to every answer whenever the sidecar was simply not running. The
+    connect answers the same question first, in a quarter second; the real
+    request below still handles a port that closes in between.
+    """
+    from urllib.parse import urlsplit
+
+    from .sidecars import listening_on
+
+    parts = urlsplit(base_url or "")
+    host = parts.hostname or "127.0.0.1"
+    port = parts.port or (443 if parts.scheme == "https" else 80)
+    return listening_on(host, port)
+
+
 def ready(settings: VoiceSettings) -> tuple[bool, str]:
     """Ask the sidecar whether it is up and speaks the protocol we speak.
 
@@ -87,6 +108,8 @@ def ready(settings: VoiceSettings) -> tuple[bool, str]:
     like garbage text, which is far worse than refusing to start.
     """
     url = settings.base_url.rstrip("/") + "/ready"
+    if not _sidecar_listening(settings.base_url):
+        return False, f"not reachable at {url} (nothing is listening)"
     try:
         with urlopen(url, timeout=settings.timeout) as response:
             payload = json.loads(response.read().decode("utf-8"))
@@ -138,6 +161,11 @@ def recorder_command(settings: VoiceSettings) -> list[str]:
         "--silence-ms", str(settings.silence_ms),
         "--max-seconds", str(settings.max_seconds),
         "--threshold", str(settings.threshold),
+        # Always sent, including the -1 default: an omitted flag and an
+        # explicit -1 mean the same thing to the client, but spelling it out
+        # keeps the command a complete record of the request that was made,
+        # which is what the doctor and the tests both read.
+        "--device", str(settings.device),
     ]
     # Only sent when set: the protocol spells auto-detect as the *absence* of
     # the language field, and "" is rejected as an unknown language. So an
@@ -210,6 +238,8 @@ def tts_ready(settings: VoiceSettings) -> tuple[bool, str]:
     screech of malformed audio, which is worse than a refusal to start.
     """
     url = settings.tts_base_url.rstrip("/") + "/ready"
+    if not _sidecar_listening(settings.tts_base_url):
+        return False, f"not reachable at {url} (nothing is listening)"
     try:
         with urlopen(url, timeout=settings.timeout) as response:
             payload = json.loads(response.read().decode("utf-8"))
@@ -284,6 +314,12 @@ def for_speech(text: str) -> str:
 
 def _synthesize(settings: VoiceSettings, text: str) -> bytes:
     """POST the text to the sidecar and return the WAV bytes."""
+    # Fail in a quarter second when nothing is listening, rather than waiting
+    # out a SYN retransmit -- see :func:`_sidecar_listening`. Reached on every
+    # reply while ``tts_enabled`` is on, so this two-second saving is the one
+    # the operator actually feels when the sidecar is simply not running.
+    if not _sidecar_listening(settings.tts_base_url):
+        raise OSError(f"nothing is listening on {settings.tts_base_url}")
     url = settings.tts_base_url.rstrip("/") + "/synthesize"
     body = json.dumps({"text": text, "instruct": settings.tts_instruct or None})
     request = Request(

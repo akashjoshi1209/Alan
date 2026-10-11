@@ -166,6 +166,24 @@ class CommandShapeTest(unittest.TestCase):
         command = voice.recorder_command(VoiceSettings(language="hi"))
         self.assertEqual(command[command.index("--language") + 1], "hi")
 
+    def test_the_device_is_always_spelled_out_including_the_default(self) -> None:
+        """Sent even as -1.
+
+        An omitted flag and an explicit -1 mean the same thing to PyAudio, but
+        spelling it out keeps the command a complete record of the request --
+        which is what a bug report or a doctor row has to work from when the
+        wrong microphone was used. It is worth spelling out because it is the
+        whole difference between working and "heard nothing": measured on this
+        machine, the Windows default input peaked at 54 against a threshold of
+        500, while another device carried real signal.
+        """
+        default = voice.recorder_command(VoiceSettings())
+        self.assertIn("--device", default)
+        self.assertEqual(default[default.index("--device") + 1], "-1")
+
+        pinned = voice.recorder_command(VoiceSettings(device=4))
+        self.assertEqual(pinned[pinned.index("--device") + 1], "4")
+
 
 class ListenTest(unittest.TestCase):
     def _settings(self) -> VoiceSettings:
@@ -256,6 +274,21 @@ class SettingsTest(unittest.TestCase):
         self.assertEqual(settings.voice.threshold, 1)
         self.assertEqual(settings.voice.max_seconds, 5.0)
 
+    def test_an_input_device_index_is_read_back(self) -> None:
+        from alan.config import _apply_tables
+
+        settings = _apply_tables(Settings(), {"voice": {"device": 3}})
+        self.assertEqual(settings.voice.device, 3)
+
+    def test_a_device_index_below_the_default_sentinel_is_floored(self) -> None:
+        """-1 means "the Windows default"; anything lower is a typo, and
+        handing it to PyAudio fails obscurely at record time."""
+        from alan.config import _apply_tables
+
+        settings = _apply_tables(Settings(), {"voice": {"device": -7}})
+        self.assertEqual(settings.voice.device, -1)
+        self.assertEqual(VoiceSettings().device, -1)
+
 
 class RecorderLogicTest(unittest.TestCase):
     """The push-to-talk client's own logic, which decides when a turn ends."""
@@ -265,6 +298,19 @@ class RecorderLogicTest(unittest.TestCase):
         for _ in range(100):
             self.assertFalse(detector.feed(0, 64.0))
         self.assertFalse(detector.speech_seen)
+
+    def test_the_loudest_frame_is_kept_even_below_the_threshold(self) -> None:
+        """The peak is what tells a muted microphone apart from a quiet room.
+
+        Both produce an empty transcript, but only one is a hardware problem,
+        so the detector keeps the loudest frame it saw even when no frame ever
+        crossed the threshold.
+        """
+        detector = recorder.SilenceDetector(threshold=500, silence_ms=1000, max_seconds=60)
+        for level in (12, 54, 40):
+            detector.feed(level, 64.0)
+        self.assertFalse(detector.speech_seen)
+        self.assertEqual(detector.peak_seen, 54)
 
     def test_speech_then_pause_ends_the_turn(self) -> None:
         detector = recorder.SilenceDetector(threshold=500, silence_ms=1000, max_seconds=60)
