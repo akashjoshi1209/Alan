@@ -247,6 +247,8 @@ class EccCatalog:
         self.root = root
         self.entries: tuple[Skill, ...] = tuple(entries)
         self._by_ref = {(e.kind, e.name.lower()): e for e in entries}
+        #: Built once by :meth:`_match_data`; see the note there.
+        self._match_cache: tuple[tuple[Skill, str, str], ...] | None = None
 
     @classmethod
     def load(cls, root: Path) -> "EccCatalog":
@@ -365,6 +367,29 @@ class EccCatalog:
             key=lambda e: (order[e.kind], -len(e.name)),
         )
 
+    def _match_data(self) -> tuple[tuple[Skill, str, str], ...]:
+        """``(entry, lowercased name, hyphen-to-space name)``, built once.
+
+        The two derived strings are the only per-entry material ``match_explicit``
+        needs, and the candidate order is fixed for the life of the catalog, so
+        every call used to re-sort the entries and re-derive both strings for all
+        of them -- then run a regex per entry, twice. On a 455-entry library that
+        measured ~380 ms per call, and the planner calls it twice per turn.
+
+        Precomputing the strings and gating each regex behind a plain ``in``
+        test (see :meth:`match_explicit`) keeps the result byte-for-byte
+        identical while cutting the cost to the handful of entries whose name
+        actually appears in the request.
+        """
+        cached = self._match_cache
+        if cached is None:
+            cached = tuple(
+                (entry, entry.name.lower(), re.sub(r"[-_]+", " ", entry.name.lower()))
+                for entry in self._candidates()
+            )
+            self._match_cache = cached
+        return cached
+
     def match_explicit(self, text: str) -> Skill | None:
         """The request names an entry outright.
 
@@ -380,15 +405,22 @@ class EccCatalog:
                 return hit
         lowered = text.lower()
 
-        for entry in self._candidates():
-            name = entry.name.lower()
+        # Both regexes below require the entry's name to appear in the request as
+        # a substring, so ``in`` -- a C-level scan -- rules almost every entry out
+        # before any pattern is built. The boundary checks then only run for names
+        # that are genuinely present, which is exactly when they can change the
+        # answer.
+        for entry, name, _spaced in self._match_data():
             if "-" not in name and "_" not in name:
+                continue
+            if name not in lowered:
                 continue
             if re.search(rf"(?<![\w-]){re.escape(name)}(?![\w-])", lowered):
                 return entry
 
-        for entry in self._candidates():
-            spaced = re.sub(r"[-_]+", " ", entry.name.lower())
+        for entry, _name, spaced in self._match_data():
+            if spaced not in lowered:
+                continue
             pattern = (
                 rf"\b{re.escape(spaced)}\s+{_FRAMING}\b"
                 rf"|\b{_FRAMING}\s+(?:named\s+|called\s+)?{re.escape(spaced)}\b"

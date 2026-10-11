@@ -16,14 +16,43 @@ from __future__ import annotations
 
 from typing import Any
 
-import requests
-
 from ..config import MemorySettings
 from ..core.probecache import probe
 
 
 class MemoryUnavailable(RuntimeError):
     """Raised when the cognee sidecar cannot be reached."""
+
+
+#: The ``requests`` module, imported on first use. A module-level name that
+#: starts as ``None`` (rather than a bare ``import`` inside :func:`_http`) so the
+#: import stays lazy *and* the transport stays swappable: the tests patch
+#: ``cognee_client.requests`` with a stub, which only works if the client reads
+#: the attribute rather than re-importing.
+requests = None
+
+
+def _http():
+    """The ``requests`` module, imported on first use.
+
+    ``requests`` drags in urllib3, http.client and email.parser, and measured
+    here it costs ~700 ms to import. cognee is the *optional* memory backend --
+    the default is a local SQLite file that opens in milliseconds and never
+    speaks HTTP -- but this module was imported by ``alan.memory`` on every
+    path, so ``alan version``, ``alan ask`` and ``alan doctor`` all paid the
+    700 ms for a backend they were not using.
+
+    Deferred to the methods that actually make a request, the way
+    ``mem0_provider`` defers ``mem0``: the cost now lands only on the cognee
+    path. ``import requests`` after the first call is a dict lookup, so this is
+    a one-time price, not a per-call tax.
+    """
+    global requests
+    if requests is None:
+        import requests as _requests
+
+        requests = _requests
+    return requests
 
 
 def _entry_text(entry: dict[str, Any]) -> str:
@@ -75,9 +104,10 @@ class CogneeMemory:
         return payload if ok else None
 
     def _health(self) -> tuple[bool, dict[str, Any] | None]:
+        http = _http()
         try:
-            response = requests.get(f"{self.base_url}/health", timeout=4)
-        except requests.RequestException:
+            response = http.get(f"{self.base_url}/health", timeout=4)
+        except http.RequestException:
             return False, None
         if response.status_code != 200:
             return False, None
@@ -111,14 +141,15 @@ class CogneeMemory:
             "self_improvement": "false",
             "run_in_background": "true" if background else "false",
         }
+        http = _http()
         try:
-            response = requests.post(
+            response = http.post(
                 f"{self.base_url}/api/v1/remember",
                 files=files,
                 data=data,
                 timeout=self.write_timeout,
             )
-        except requests.RequestException:
+        except http.RequestException:
             return False
         return response.status_code == 200
 
@@ -147,13 +178,14 @@ class CogneeMemory:
             "topK": top_k or self.top_k,
             "searchType": search_type,
         }
+        http = _http()
         try:
-            response = requests.post(
+            response = http.post(
                 f"{self.base_url}/api/v1/recall",
                 json=payload,
                 timeout=self.timeout,
             )
-        except requests.RequestException:
+        except http.RequestException:
             return []
         if response.status_code != 200:  # 404 == "no memory yet"
             return []
@@ -204,21 +236,23 @@ class CogneeMemory:
             payload["dataset"] = self.dataset
             if memory_only:
                 payload["memoryOnly"] = True
+        http = _http()
         try:
-            response = requests.post(
+            response = http.post(
                 f"{self.base_url}/api/v1/forget",
                 json=payload,
                 timeout=self.timeout,
             )
-        except requests.RequestException:
+        except http.RequestException:
             return False
         return response.status_code == 200
 
     # -- introspection ------------------------------------------------
     def datasets(self) -> list[dict[str, Any]]:
+        http = _http()
         try:
-            response = requests.get(f"{self.base_url}/api/v1/datasets", timeout=self.timeout)
-        except requests.RequestException:
+            response = http.get(f"{self.base_url}/api/v1/datasets", timeout=self.timeout)
+        except http.RequestException:
             return []
         if response.status_code != 200:
             return []

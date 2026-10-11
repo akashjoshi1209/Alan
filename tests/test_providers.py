@@ -13,9 +13,11 @@ constructed and asked only whether a key is present.
 
 from __future__ import annotations
 
+import json
 import os
 import unittest
 from contextlib import contextmanager
+from unittest import mock
 
 from alan.config import (
     API_KEY_ENV,
@@ -33,6 +35,7 @@ from alan.interfaces.types import _SECRET_ENV_NAMES, redact
 from alan.llm import _NAMES, _construct
 from alan.llm.base import Provider, ProviderError, _is_connect_timeout, connect_hint
 from alan.llm.cloud import OpenAIProvider
+from alan.llm.local import OllamaProvider
 from alan.models.router import ModelRouter, RoutingRequest
 
 
@@ -446,6 +449,57 @@ class ConnectTimeoutTest(unittest.TestCase):
                 provider.chat([{"role": "user", "content": "hi"}])
         message = str(caught.exception)
         self.assertTrue(message.startswith("groq request failed: "), message)
+
+
+class OllamaProbeTest(unittest.TestCase):
+    """The local liveness probe reads ``/api/tags`` directly.
+
+    Pinned because the obvious implementation -- ``ollama.Client().list()`` --
+    drags the whole SDK in, and measured here that is ~2.4 s to import plus
+    ~0.7 s to construct, on a path that runs on every uncached command.
+    """
+
+    def _payload(self, names: list[str]):
+        body = json.dumps({"models": [{"model": n} for n in names]}).encode("utf-8")
+        response = mock.MagicMock()
+        response.read.return_value = body
+        response.__enter__ = lambda self: self
+        response.__exit__ = lambda *args: False
+        return response
+
+    def test_list_models_reads_the_rest_endpoint(self) -> None:
+        provider = OllamaProvider()
+        with mock.patch("alan.sidecars.listening_on", return_value=True), \
+                mock.patch(
+                    "urllib.request.urlopen", return_value=self._payload(["a:1", "b:2"])
+                ) as urlopen:
+            names = provider._list_models()
+
+        self.assertEqual(names, ["a:1", "b:2"])
+        self.assertIn("/api/tags", urlopen.call_args.args[0].full_url)
+
+    def test_a_listed_model_is_ready(self) -> None:
+        provider = OllamaProvider(model="qwen2.5:1.5b")
+        with mock.patch.object(provider, "_list_models", lambda: ["qwen2.5:1.5b"]):
+            ok, reason = provider._probe()
+        self.assertTrue(ok, reason)
+
+    def test_a_model_that_is_not_pulled_names_the_pull_script(self) -> None:
+        provider = OllamaProvider(model="missing:1b")
+        with mock.patch.object(provider, "_list_models", lambda: ["qwen2.5:1.5b"]):
+            ok, reason = provider._probe()
+        self.assertFalse(ok)
+        self.assertIn("pull-model.ps1", reason)
+
+    def test_a_closed_port_is_rejected_before_any_request_is_made(self) -> None:
+        """Port 1 is reserved and nothing listens on it: the probe must fail on
+        the liveness check, not on a request that waits out a SYN retransmit."""
+        provider = OllamaProvider(base_url="http://127.0.0.1:1")
+        with mock.patch("urllib.request.urlopen") as urlopen:
+            ok, reason = provider._probe()
+        self.assertFalse(ok)
+        self.assertIn("not reachable", reason)
+        urlopen.assert_not_called()
 
 
 if __name__ == "__main__":

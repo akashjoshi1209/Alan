@@ -31,8 +31,6 @@ from __future__ import annotations
 import base64
 from typing import Any
 
-import requests
-
 from ...interfaces.capabilities import BrowserProvider, BrowserResult
 
 #: Where the sidecar listens. Deliberately not 8012 (cognee) or the Ollama
@@ -43,9 +41,45 @@ DEFAULT_BASE_URL = "http://127.0.0.1:8022"
 #: already has its own budget.
 _HEALTH_TIMEOUT = 3.0
 
+#: Ceiling on the TCP connect phase of every sidecar request. A *closed*
+#: loopback port is silently dropped by the Windows firewall rather than
+#: refused, so a request without its own connect budget waits out a ~2 s SYN
+#: retransmit before it can fail. Bounding the connect -- while leaving the read
+#: at the caller's timeout -- turns "the sidecar is not running" into a
+#: sub-second answer without shortening any real action.
+_CONNECT_TIMEOUT = 0.5
+
 
 class BrowserUnavailable(RuntimeError):
     """The sidecar is not running or not answering."""
+
+
+#: The ``requests`` module, imported on first use. A module-level name that
+#: starts as ``None`` (rather than a bare ``import`` inside :func:`_http`) so the
+#: import stays lazy *and* the transport stays swappable: the tests replace
+#: ``module.requests`` with a stub, which only works if the client reads the
+#: attribute rather than re-importing.
+requests = None
+
+
+def _http():
+    """The ``requests`` module, imported on first use.
+
+    ``requests`` drags in urllib3, http.client and email.parser, and measured
+    here costs ~350-700 ms to import. The browser is an *optional* sidecar that
+    is off by default and not running in most sessions, but ``runtime`` imports
+    this module to build the provider, so a module-level import made every
+    ``alan version``, ``alan ask`` and ``alan doctor`` pay for a browser they
+    were not using. Deferred to the two methods that actually speak HTTP
+    (``_post`` and ``_probe``), the same way ``available`` already defers
+    ``probecache`` into the call.
+    """
+    global requests
+    if requests is None:
+        import requests as _requests
+
+        requests = _requests
+    return requests
 
 
 class SidecarBrowser(BrowserProvider):
@@ -60,9 +94,12 @@ class SidecarBrowser(BrowserProvider):
     # -- transport ------------------------------------------------------
     def _post(self, path: str, payload: dict[str, Any] | None = None) -> BrowserResult:
         url = f"{self.base_url}{path}"
+        http = _http()
         try:
-            response = requests.post(url, json=payload or {}, timeout=self.timeout)
-        except requests.RequestException as exc:
+            response = http.post(
+                url, json=payload or {}, timeout=(_CONNECT_TIMEOUT, self.timeout)
+            )
+        except http.RequestException as exc:
             raise BrowserUnavailable(
                 f"the browser sidecar at {self.base_url} did not answer "
                 f"({exc.__class__.__name__}). Start it with scripts\\browser-serve.ps1 "
@@ -90,9 +127,12 @@ class SidecarBrowser(BrowserProvider):
         )
 
     def _probe(self) -> tuple[bool, str]:
+        http = _http()
         try:
-            response = requests.get(f"{self.base_url}/health", timeout=_HEALTH_TIMEOUT)
-        except requests.RequestException as exc:
+            response = http.get(
+                f"{self.base_url}/health", timeout=(_CONNECT_TIMEOUT, _HEALTH_TIMEOUT)
+            )
+        except http.RequestException as exc:
             return False, f"sidecar not reachable at {self.base_url} ({exc.__class__.__name__})"
         if response.status_code != 200:
             return False, f"sidecar unhealthy (HTTP {response.status_code})"

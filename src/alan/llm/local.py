@@ -7,6 +7,10 @@ from typing import Iterator, Sequence
 from .base import Message, Provider, ProviderError, _merge_system
 from ..core.probecache import forget_key, probe_reason
 
+#: Ceiling on the liveness probe's HTTP read. The list endpoint answers in
+#: milliseconds on a live server, so this only ever bounds a wedged one.
+_PROBE_TIMEOUT = 4.0
+
 
 def _extract_content(resp: object) -> str:
     """Handle both dict and pydantic-style ollama responses."""
@@ -44,6 +48,45 @@ class OllamaProvider(Provider):
             self._client = Client(host=self.base_url or "http://127.0.0.1:11435")
         return self._client
 
+    def _list_models(self) -> list[str]:
+        """Model names straight from Ollama's own ``/api/tags``.
+
+        Deliberately the REST endpoint rather than ``ollama.Client``: importing
+        the ``ollama`` package costs ~2.4 s here -- it drags in httpx and
+        pydantic -- and constructing the client adds ~0.7 s more. Spending three
+        seconds to answer "which models do you have?" on every uncached command
+        is most of why a fresh ``alan providers`` felt slow. The client is still
+        used for chat and stream, where it is imported lazily in
+        :meth:`_get_client`; only the liveness probe avoids it.
+
+        The imports are local for the same reason: this module is on the startup
+        path of every command, and a probe that never runs (a warm cache) should
+        not pay for ``urllib.request``.
+        """
+        import json
+        import urllib.request
+        from urllib.parse import urlsplit
+
+        from ..sidecars import listening_on
+
+        url = (self.base_url or "http://127.0.0.1:11435").rstrip("/") + "/api/tags"
+        parts = urlsplit(url)
+        host = parts.hostname or "127.0.0.1"
+        port = parts.port or (443 if parts.scheme == "https" else 80)
+        # A closed loopback port is dropped, not refused, on Windows: without
+        # this the request would sit out a ~2 s SYN retransmit before failing.
+        if not listening_on(host, port):
+            raise OSError(f"nothing is listening on {host}:{port}")
+        request = urllib.request.Request(url, headers={"Accept": "application/json"})
+        with urllib.request.urlopen(request, timeout=_PROBE_TIMEOUT) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+        names: list[str] = []
+        for row in payload.get("models") or []:
+            name = row.get("model") or row.get("name")
+            if name:
+                names.append(name)
+        return names
+
     def close(self) -> None:
         client = self._client
         self._client = None
@@ -72,15 +115,9 @@ class OllamaProvider(Provider):
 
     def _probe(self) -> tuple[bool, str]:
         try:
-            client = self._get_client()
-            models = client.list()
+            names = self._list_models()
         except Exception as exc:  # noqa: BLE001
             return False, f"Ollama not reachable at {self.base_url} ({exc})"
-        names = []
-        for m in getattr(models, "models", []) or []:
-            model_name = getattr(m, "model", None) or getattr(m, "name", None)
-            if model_name:
-                names.append(model_name)
         if self.model and not any(n == self.model or n.startswith(self.model) for n in names):
             return (
                 False,

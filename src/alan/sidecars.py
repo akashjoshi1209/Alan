@@ -42,17 +42,27 @@ OLLAMA_PORT = 11435
 _START_FLAG_SECONDS = 300
 
 
-def listening(port: int) -> bool:
-    """Is something accepting connections on ``127.0.0.1:port``?
+def listening_on(host: str, port: int, timeout: float = 0.25) -> bool:
+    """Is something accepting connections on ``host:port``?
 
     A connect, not a request: the question "is it up" is answered by the
-    handshake, and a hung sidecar that is not completing one is not up.
+    handshake, and a hung sidecar that is not completing one is not up. The
+    timeout is the point as much as the connect is: a *closed* loopback port is
+    silently dropped by the Windows firewall, so the OS only reports the
+    refusal after a ~2 s SYN retransmit -- and a full HTTP request against that
+    port waits it out before it can fail. Capping the connect at a quarter
+    second turns "nothing is listening" into a sub-second answer.
     """
     try:
-        with socket.create_connection(("127.0.0.1", port), timeout=0.25):
+        with socket.create_connection((host, port), timeout=timeout):
             return True
     except OSError:
         return False
+
+
+def listening(port: int) -> bool:
+    """Is something accepting connections on ``127.0.0.1:port``?"""
+    return listening_on("127.0.0.1", port)
 
 
 def _flag_path(root: Path, name: str) -> Path:
