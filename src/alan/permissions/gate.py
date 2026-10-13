@@ -26,6 +26,7 @@ from ..interfaces.types import (
     PermissionRequest,
     RiskLevel,
 )
+from .guards import GuardSet
 from .rules import RuleSet
 
 #: Capabilities that are always refused, regardless of configuration.
@@ -61,6 +62,13 @@ class PermissionGate:
     decisions: list[PermissionDecision] = field(default_factory=list)
     #: Operator rules (allow/ask/block), consulted after the hard checks.
     rules: RuleSet | None = None
+    #: Deny-only monotonic guards (from DeepSeek Harness's ``ctx.tools.guard()``).
+    #: Consulted *before* the confirmation logic so an ``allow`` rule can never
+    #: rescue a capability a guard refuses -- see :mod:`.guards`.
+    guards: GuardSet | None = None
+    #: The reason the last check was denied by a guard, if it was. Read by the
+    #: registry so a refusal names the guard instead of just "permission denied".
+    last_reason: str = ""
 
     # -- configuration -------------------------------------------------
     def set_policy(self, policy: Policy) -> None:
@@ -68,6 +76,9 @@ class PermissionGate:
 
     def set_rules(self, rules: RuleSet | None) -> None:
         self.rules = rules or None
+
+    def set_guards(self, guards: GuardSet | None) -> None:
+        self.guards = guards or None
 
     def policy_for(self, capability: str, default_risk: RiskLevel) -> Policy:
         """Most specific matching policy, else a derived default.
@@ -112,6 +123,7 @@ class PermissionGate:
 
     def _evaluate(self, request: PermissionRequest) -> PermissionDecision:
         capability = request.capability
+        self.last_reason = ""
         if capability in FORBIDDEN:
             return PermissionDecision.DENIED
 
@@ -140,6 +152,17 @@ class PermissionGate:
                 return PermissionDecision.DENIED
         if policy.allowed_prefixes:
             if not any(target.lower().startswith(p.lower()) for p in policy.allowed_prefixes):
+                return PermissionDecision.DENIED
+
+        # Deny-only guards. This runs *after* the hard checks and *before*
+        # the confirmation logic, which is what makes it monotonic: everything
+        # below only ever tightens (asking for confirmation), so no ``allow``
+        # rule and no ``requires_confirmation = False`` can widen a refusal
+        # made here. A guard that refuses short-circuits to DENIED.
+        if self.guards is not None:
+            guard = self.guards.denying(request)
+            if guard is not None:
+                self.last_reason = guard.explain()
                 return PermissionDecision.DENIED
 
         requires_confirmation = policy.requires_confirmation

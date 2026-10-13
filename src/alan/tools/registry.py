@@ -11,10 +11,12 @@ section 15) instead of the process dying.
 
 from __future__ import annotations
 
+import json
 import threading
 import time
 from typing import Any, Callable, Sequence
 
+from ..core.effects import effect_key
 from ..core.events import EventBus, Events
 from ..interfaces.tools import ToolInvoker, ToolProvider
 from ..interfaces.types import (
@@ -23,6 +25,7 @@ from ..interfaces.types import (
     RiskLevel,
     ToolResult,
     ToolSpec,
+    new_id,
 )
 from ..permissions.gate import PermissionGate
 
@@ -172,6 +175,52 @@ def _preview(output: Any, limit: int = 200) -> str:
     return text
 
 
+#: Largest tool output the ledger will store in full. Beyond this the recorded
+#: payload keeps only a preview, because a ledger that grew to the size of its
+#: biggest tool output would be unusable on the phone it is meant to protect.
+_LEDGER_MAX_OUTPUT = 64 * 1024
+
+
+def _ledger_outcome(
+    ledger: Any,
+    effect: Any,
+    *,
+    ok: bool,
+    output: Any = None,
+    error: str = "",
+) -> None:
+    """Settle an effect record. Never raises.
+
+    Settling is best-effort *after* the fact: the side effect already
+    happened, so a failure to write the record must not turn a successful
+    tool call into an error. Leaving the entry at INTENT is survivable --
+    recovery will call it INTERRUPTED and a human decides.
+    """
+    if ledger is None or effect is None:
+        return
+    try:
+        if ok:
+            payload = output
+            truncated = False
+            try:
+                if len(json.dumps(payload, default=str, ensure_ascii=True)) > _LEDGER_MAX_OUTPUT:
+                    payload = _preview(payload, limit=2000)
+                    truncated = True
+            except (TypeError, ValueError):
+                payload = repr(payload)
+                truncated = True
+            ledger.mark_applied(effect.key, output=payload)
+            if truncated:
+                settled = ledger.get(effect.key)
+                if settled is not None:
+                    settled.result["output_truncated"] = True
+                    ledger.save()
+        else:
+            ledger.mark_failed(effect.key, error)
+    except Exception:  # noqa: BLE001 - observability must not break the call
+        pass
+
+
 class ToolRegistry(ToolInvoker):
     """Holds tool specs and executes them behind the permission gate."""
 
@@ -191,6 +240,18 @@ class ToolRegistry(ToolInvoker):
         #: Threads still running a call we already gave up on, per tool name.
         #: See :meth:`invoke` for why abandoning a call cannot be free.
         self._hung: dict[str, set[threading.Thread]] = {}
+        #: Optional effect ledger. When set, every side-effecting tool records
+        #: INTENT before it runs and APPLIED/FAILED after, so a crash mid-call
+        #: is recoverable instead of invisible. See :mod:`alan.core.effects`.
+        self._ledger: Any = None
+
+    def set_ledger(self, ledger: Any) -> None:
+        """Attach an :class:`~alan.core.effects.EffectLedger` (``None`` clears).
+
+        Opt-in on purpose: the ledger is extra I/O, and a registry used for a
+        read-only test double has no use for it.
+        """
+        self._ledger = ledger
 
     # -- registration --------------------------------------------------
     def register(self, spec: ToolSpec) -> ToolSpec:
@@ -348,10 +409,17 @@ class ToolRegistry(ToolInvoker):
                 awaiting = candidate
 
         if denied:
+            # Name the guard that refused, when one did. A bare "permission
+            # denied" tells the operator nothing about *which* policy stopped
+            # the call or how to change their mind.
+            reason = getattr(self.gate, "last_reason", "") or ""
+            detail = f"permission denied for {name} (risk={spec.risk})"
+            if reason:
+                detail = f"{detail}: {reason}"
             emit(Events.TOOL_FAILED, tool=name, error="permission denied")
             return ToolResult(
                 ok=False, tool=name,
-                error=f"permission denied for {name} (risk={spec.risk})",
+                error=detail,
             )
         if needs_confirmation and not confirm:
             approved = False
@@ -389,6 +457,35 @@ class ToolRegistry(ToolInvoker):
                     f"tool, not a permission problem.)"
                 ),
             )
+
+        # -- effect ledger: record intent before the side effect ---------
+        # Only for tools that can change the world (LOW_RISK and up); a read
+        # has nothing to make durable. The key is scoped to this run so an
+        # identical call in a *later* request is a legitimate new effect --
+        # with no run scope at all we decline to dedupe rather than guess,
+        # because skipping a side effect that was supposed to happen is the
+        # more damaging error.
+        effect: Any = None
+        ledger = self._ledger
+        if ledger is not None and spec.risk >= RiskLevel.LOW_RISK:
+            scope = str(trace_id or session_id or "")
+            key = effect_key(name, args, scope) if scope else new_id("fx_")
+            effect = ledger.begin(name, args, key=key, run_id=scope, trace_id=str(trace_id or ""))
+            if effect.applied:
+                # Exactly-once. This call already happened inside this run, so
+                # hand back the recorded output instead of doing it twice.
+                recorded = dict(effect.result or {})
+                emit(
+                    Events.TOOL_FINISHED, tool=name, duration_ms=0.0,
+                    result=_preview(recorded.get("output")), replayed=True,
+                )
+                return ToolResult(
+                    ok=bool(recorded.get("ok", True)),
+                    output=recorded.get("output"),
+                    error=effect.error or None,
+                    tool=name,
+                    metadata={"replayed": True, "effect": effect.id},
+                )
 
         # One thread per call, on purpose. A shared worker pool means a tool that
         # ignores its timeout permanently consumes one of a fixed number of
@@ -431,6 +528,9 @@ class ToolRegistry(ToolInvoker):
                     if not done.is_set():
                         self._hung.setdefault(name, set()).add(worker)
                 duration = (time.perf_counter() - started) * 1000
+                _ledger_outcome(ledger, effect, ok=False,
+                                error=f"timed out after {spec.timeout}s; "
+                                      "the side effect may still complete")
                 emit(
                     Events.TOOL_FAILED, tool=name, duration_ms=duration,
                     error="timeout",
@@ -445,6 +545,8 @@ class ToolRegistry(ToolInvoker):
             output = value
         except Exception as exc:
             duration = (time.perf_counter() - started) * 1000
+            _ledger_outcome(ledger, effect, ok=False,
+                            error=f"{type(exc).__name__}: {exc}")
             emit(
                 Events.TOOL_FAILED, tool=name, duration_ms=duration,
                 error=type(exc).__name__,
@@ -461,6 +563,7 @@ class ToolRegistry(ToolInvoker):
             self._live.release()
 
         duration = (time.perf_counter() - started) * 1000
+        _ledger_outcome(ledger, effect, ok=True, output=output)
         emit(Events.TOOL_FINISHED, tool=name, duration_ms=duration,
              result=_preview(output))
         return ToolResult(ok=True, output=output, tool=name, duration_ms=duration)

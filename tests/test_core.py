@@ -1062,12 +1062,14 @@ class TestEvents(unittest.TestCase):
         # `lesson` is the failure-memory namespace: lesson.recalled is shown to
         # the next attempt, lesson.recorded is written to the store. Scheduler,
         # approval and activity are the always-on (Phase 1) namespaces.
+        # `effect` is the effect-ledger namespace: what a run actually did to
+        # the world, durable across restarts (core.effects).
         for name in names:
             self.assertIn(
                 name.split(".")[0],
                 prefixes
                 | {"request", "plan", "recovery", "lesson",
-                   "scheduler", "approval", "activity", "task"},
+                   "scheduler", "approval", "activity", "task", "effect"},
                 f"{name} is not in a documented namespace",
             )
 
