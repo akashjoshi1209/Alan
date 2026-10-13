@@ -18,7 +18,7 @@
     /_/   \_\ |_____| /_/    \_\ |__| \___|
 ```
 
-**Contents** — [What Alan is](#what-alan-is) · [Why it's different](#why-alan-is-different) · [Quick start](#quick-start) · [Commands](#the-commands) · [Brain](#choosing-a-brain) · [Memory](#memory) · [Voice](#voice) · [Failures](#learning-from-failure) · [Always-on](#always-on-scheduling) · [Browsing](#browsing) · [Coding](#coding) · [Skills](#skills-ecc) · [Layout](#layout) · [Anywhere](#location-independence) · [Performance](#performance) · [Troubleshooting](#troubleshooting)
+**Contents** — [What Alan is](#what-alan-is) · [Why it's different](#why-alan-is-different) · [Install](#install) · [Quick start](#quick-start) · [Commands](#the-commands) · [Brain](#choosing-a-brain) · [Memory](#memory) · [Voice](#voice) · [Failures](#learning-from-failure) · [Always-on](#always-on-scheduling) · [Browsing](#browsing) · [Coding](#coding) · [Skills](#skills-ecc) · [Layout](#layout) · [Anywhere](#location-independence) · [Performance](#performance) · [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -54,39 +54,66 @@ or renamed without a reinstall (`ALAN_HOME` overrides it).
 
 ---
 
-## Quick start
+## Install
 
-### Installed from npm
+Alan runs on **Windows 10 | 11**. Both routes need **Python 3.12 or newer** on
+`PATH`; the npm route also needs **Node.js 18 or newer**.
+
+### From npm -- recommended
 
 ```powershell
 npm install -g alan-agent
+```
+
+That is the whole install. The first run asks before it touches the network: it
+creates a virtual environment under `%LOCALAPPDATA%\alan-agent`, installs the
+pinned dependencies from `requirements.txt`, and stages Alan's source beside it
+-- outside `node_modules`, so `npm update` never disturbs your data or your
+conversations. It is one `y` to approve; set `ALAN_AGENT_YES=1` to skip the
+question.
+
+```powershell
+alan-agent doctor             # is everything wired up?
+```
+
+The browser, voice and cognee sidecars are optional and are **not** installed by
+this. Build one when you want it, with the `scripts\setup-*` scripts listed
+under [Commands](#the-commands).
+
+### From a clone
+
+The repository carries Alan's source but not its bundled interpreter -- `env\`
+is git-ignored -- so a clone runs against any Python you already have:
+
+```powershell
+git clone -b python-core https://github.com/akashjoshi1209/Alan.git
+cd Alan
+python -m venv .venv
+.venv\Scripts\python.exe -m pip install -r requirements.txt
+$env:PYTHONPATH = "$PWD\src"
+.venv\Scripts\python.exe -m alan doctor
+```
+
+`Alan.cmd` in the folder root is the fast launcher used in development. It
+points at the bundled `env\python`, which a clone does not ship -- use the venv
+above instead.
+
+---
+
+## Quick start
+
+```powershell
 alan-agent                    # interactive chat at the you> prompt
 alan-agent ask "What is the capital of France?"
 alan-agent doctor             # is everything wired up?
 ```
 
-The first run stops and asks before it touches the network: it creates a
-virtual environment under `%LOCALAPPDATA%\alan-agent` and installs the pinned
-dependencies from `requirements.txt`. Alan's source is staged into that same
-folder, so `npm update` never disturbs your data or your conversations.
-Requires Python 3.12 or newer on `PATH`; set `ALAN_AGENT_YES=1` to approve the
-install without being asked.
-
-### Cloned from this repository
-
-```powershell
-cd D:\Alan
-Alan.cmd                    # interactive chat at the you> prompt
-Alan.cmd ask "What is the capital of France?"
-Alan.cmd doctor             # is everything wired up?
-```
-
-Or double-click `Alan.cmd` in the folder root -- or, after
-`scripts\install-command.ps1`, just type `alan` from any prompt. That path is
-cmd and Python directly (no PowerShell in between), so the prompt draws in
-about two seconds. `scripts\run.ps1` is the full launcher -- same commands,
-sidecar lifecycle visible -- and `run.ps1 voice` the only flow that still
-needs it.
+With the repository's own bundled environment, `Alan.cmd` does the same job --
+double-click it in the folder root, or, after `scripts\install-command.ps1`,
+just type `alan` from any prompt. That path is cmd and Python directly (no
+PowerShell in between), so the prompt draws in about two seconds.
+`scripts\run.ps1` is the full launcher -- same commands, sidecar lifecycle
+visible -- and `run.ps1 voice` the only flow that still needs it.
 
 First launch starts the bundled Ollama server and uses the local model in
 `models\`. Add a cloud key later if you want a bigger brain.
