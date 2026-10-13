@@ -120,6 +120,15 @@ class Task:
     #: ``0`` means unlimited. Bounds a persistently-failing task from turning
     #: an always-on daemon into a retry loop that never stops.
     max_attempts: int = 5
+    #: Claims made since the last :meth:`RunStore.reopen`.
+    #:
+    #: Kept separate from ``attempts`` because two different things want
+    #: counting and neither can give way. ``attempts`` is the task's whole
+    #: life and labels every run, so an operator reading a ledger never sees
+    #: two attempts wearing the same number. ``runway`` is what
+    #: ``max_attempts`` bounds, and reopening is precisely the act of buying
+    #: more of it -- so it resets while ``attempts`` does not.
+    runway: int = 0
     #: Idempotency key: submitting the same key twice returns this task.
     key: str = ""
     run_ids: list[str] = field(default_factory=list)
@@ -147,6 +156,7 @@ class Task:
             "fence": self.fence,
             "attempts": self.attempts,
             "max_attempts": self.max_attempts,
+            "runway": self.runway,
             "key": self.key,
             "run_ids": list(self.run_ids),
             "waiting": self.waiting,
@@ -167,6 +177,11 @@ class Task:
             fence=int(data.get("fence", 0) or 0),
             attempts=int(data.get("attempts", 0) or 0),
             max_attempts=int(data.get("max_attempts", 5) or 0),
+            # Records written before this field existed fall back to
+            # ``attempts``, which is the bound they were actually held to.
+            # Defaulting to 0 would quietly hand every old task a fresh
+            # budget it had already spent.
+            runway=int(data.get("runway") or data.get("attempts") or 0),
             key=str(data.get("key", "")),
             run_ids=[str(x) for x in (data.get("run_ids") or [])],
             waiting=dict(data.get("waiting") or {}),
@@ -451,10 +466,12 @@ class RunStore:
                 return None
             task.status = ST_QUEUED
             task.error = ""
-            # A fresh runway, but *not* a fresh fence: the fencing token must
-            # stay monotonic for the life of the task or a worker from an old
-            # epoch could commit into a new one.
-            task.attempts = 0
+            # A fresh retry budget, but *not* a fresh fence or attempt count.
+            # The fencing token must stay monotonic for the life of the task
+            # or a worker from an old epoch could commit into a new one; the
+            # attempt number must stay monotonic or a ledger reader meets two
+            # attempts wearing the same number. Only the budget is spent again.
+            task.runway = 0
             task.updated_at = _now()
             self._save()
             self._emit_task("task.reopened", task)
@@ -481,14 +498,20 @@ class RunStore:
             task = self._tasks.get(task_id)
             if task is None or task.settled:
                 return None
-            # A task that keeps failing must stop on its own. Attempts are
+            # A task that keeps failing must stop on its own. The runway is
             # bounded so a daemon cannot spin on one broken job forever; the
-            # operator reopens it deliberately once they know why.
-            if task.max_attempts > 0 and task.attempts >= task.max_attempts:
-                if task.status != ST_FAILED:
+            # operator reopens it deliberately once they know why, which buys
+            # another runway without erasing how many times it really ran.
+            if task.max_attempts > 0 and task.runway >= task.max_attempts:
+                # Guard on the *reason*, not the status. `finish` has usually
+                # already set FAILED and blanked `error`, so testing the status
+                # alone skips the one path this branch exists to explain -- a
+                # task that gave up must say so, or the operator just finds a
+                # job that stopped claiming and no clue why.
+                if task.status != ST_FAILED or not task.error:
                     task.status = ST_FAILED
                     task.error = (
-                        f"gave up after {task.attempts} attempt(s); "
+                        f"gave up after {task.runway} attempt(s); "
                         "reopen the task to try again"
                     )
                     task.updated_at = _now()
@@ -503,6 +526,7 @@ class RunStore:
                     return None
             task.fence += 1
             task.attempts += 1
+            task.runway += 1
             task.status = ST_LEASED
             task.updated_at = _now()
             run = Run(
