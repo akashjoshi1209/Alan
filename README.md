@@ -8,7 +8,7 @@
 ![Platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-0078D6?style=flat-square)
 ![Offline-first](https://img.shields.io/badge/offline-first-local%20models-2E7D32?style=flat-square)
 ![Memory](https://img.shields.io/badge/memory-keeps%20it%20on%20disk-8A2BE2?style=flat-square)
-![License](https://img.shields.io/badge/license-MIT-1B9AAA?style=flat-square)
+![License](https://img.shields.io/badge/license-all%20rights%20reserved-lightgrey?style=flat-square)
 
 ```
         _      _          __      __     _
@@ -55,6 +55,24 @@ or renamed without a reinstall (`ALAN_HOME` overrides it).
 ---
 
 ## Quick start
+
+### Installed from npm
+
+```powershell
+npm install -g alan-agent
+alan-agent                    # interactive chat at the you> prompt
+alan-agent ask "What is the capital of France?"
+alan-agent doctor             # is everything wired up?
+```
+
+The first run stops and asks before it touches the network: it creates a
+virtual environment under `%LOCALAPPDATA%\alan-agent` and installs the pinned
+dependencies from `requirements.txt`. Alan's source is staged into that same
+folder, so `npm update` never disturbs your data or your conversations.
+Requires Python 3.12 or newer on `PATH`; set `ALAN_AGENT_YES=1` to approve the
+install without being asked.
+
+### Cloned from this repository
 
 ```powershell
 cd D:\Alan
@@ -672,4 +690,5 @@ under the hood), or `scripts\selftest.ps1` for the offline smoke tests.
 
 ## License
 
-MIT
+All rights reserved. No licence is granted -- this is not open source, and
+npm records the package as `UNLICENSED`. Ask before you reuse any of it.

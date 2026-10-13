@@ -39,6 +39,11 @@ pydantic==2.13.5
 requests==2.34.2
 httpx==0.28.1
 typing_extensions==4.16.0
+# config.py does `from dotenv import load_dotenv` at module scope, so this is
+# not optional: without it `python -m alan` dies on import before any command
+# runs. It is recorded here because env\python carries it and this file exists
+# to reproduce env\python -- an install from these pins alone has to work.
+python-dotenv==1.2.4
 
 # -- command line ------------------------------------------------------------
 typer==0.27.2

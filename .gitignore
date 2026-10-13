@@ -27,6 +27,10 @@ __pycache__/
 *.egg-info/
 .venv/
 
+# npm package staging (npm/build.ps1 output -- never committed)
+npm/.stage/
+npm/*.tgz
+
 # Editor / OS
 .vscode/
 .idea/

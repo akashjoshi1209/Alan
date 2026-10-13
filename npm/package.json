@@ -1,0 +1,38 @@
+{
+  "name": "alan-agent",
+  "version": "0.1.0",
+  "description": "Alan - a local-first personal assistant. Bootstraps a pinned Python environment and runs Alan from it.",
+  "keywords": [
+    "alan",
+    "assistant",
+    "ai",
+    "agent",
+    "local-first",
+    "personal-assistant"
+  ],
+  "author": "akashjoshi1209",
+  "license": "UNLICENSED",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/akashjoshi1209/Alan.git"
+  },
+  "bugs": {
+    "url": "https://github.com/akashjoshi1209/Alan/issues"
+  },
+  "homepage": "https://github.com/akashjoshi1209/Alan#readme",
+  "bin": {
+    "alan-agent": "bin/alan-agent.js"
+  },
+  "files": [
+    "bin",
+    "src",
+    "requirements.txt",
+    "README.md"
+  ],
+  "os": [
+    "win32"
+  ],
+  "engines": {
+    "node": ">=18"
+  }
+}
