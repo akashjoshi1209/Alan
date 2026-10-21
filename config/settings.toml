@@ -226,9 +226,10 @@ deny = []
 # failing vaguely, and `alan doctor` shows the state. Nothing is fetched until a
 # tool is actually called and the permission gate has approved it.
 execution = true
-# The jail. Whole-device access means the D: drive, not C:\Windows or the
-# rest of the system -- those stay protected by the executor's root check.
-execution_root = "D:\\"
+# The jail. On this machine the restored work lives under C:\work -- not
+# C:\Windows or the rest of the system, which stay protected by the executor's
+# root check. (Was D:\ on the old machine, which no longer exists here.)
+execution_root = "C:\\work"
 browser = true
 coding = false
 
@@ -255,104 +256,12 @@ base_url = "http://127.0.0.1:8022"
 # Ceiling for a single browser request, in seconds. Enforced on both sides.
 timeout = 60.0
 
-[voice]
-# Voice input: talk to Alan instead of typing.
-#
-# Audio never reaches a cloud: the transcriber is the whisper-flow sidecar
-# (vendor\whisper-flow, its own environment at env\whisper\python), running
-# Whisper locally. A push-to-talk client streams the microphone to it and
-# Alan asks the resulting text through the ordinary pipeline -- same memory,
-# same permission gate.
-#
-# Setup and lifecycle:
-#   scripts\setup-whisper.ps1       build the sidecar environment (one time)
-#   scripts\pull-stt-model.ps1      download an STT model (small is here)
-#   scripts\whisper-serve.ps1       start / -Stop / -Status
-#   scripts\run.ps1 voice           speak a question, get the answer
-#
-# Off in code, on in this install: a voice channel is an operator's choice.
-enabled = true
-base_url = "http://127.0.0.1:8181"
-
-# A model from GET /ready. tiny.en (72 MB, English-only) ships inside the
-# package; this install uses small (466 MB, 99 languages), pulled by
-# scripts\pull-stt-model.ps1. Bigger is more accurate and slower on CPU.
-model = "small.pt"
-
-# Whisper language code ("en", "hi", ...). Empty = auto-detect, which only a
-# multilingual model can do -- .en models ignore language entirely. Force it
-# here if auto-detect picks the wrong one on short phrases.
-language = ""
-
-# Vocabulary hint (whisper's initial_prompt): biases spelling of names and
-# jargon. Leave empty for none.
-prompt = ""
-
-# End of a turn: this much quiet, once speech has been heard. And a hard stop,
-# so a noisy room cannot record until the disk fills.
-silence_ms = 1200
-max_seconds = 60.0
-
-# Peak PCM amplitude that counts as speech. Raise it in a noisy room.
-threshold = 500
-
-# Which microphone. -1 means "whatever Windows calls the default recording
-# device", which is only right if that default is the one you speak into.
-#
-# Measured on this machine: the default input peaked at 54 against a threshold
-# of 500, so voice input recorded for the full 60s and reported "heard nothing"
-# while other devices carried real signal. Several front-panel jacks and paired
-# Bluetooth headsets make that common. Run scripts\voice-levels.ps1 -All while
-# speaking, then set the index it reports here.
-device = -1
-
-# Speech output: the other direction of the same channel.
-#
-# Alan hears with whisper-flow (above) and answers out loud, locally, so a
-# reply never leaves the machine either. Separate switch from `enabled` on
-# purpose: hearing costs a whisper model that is already resident, speaking
-# costs a TTS sidecar that holds its engine in RAM only while it runs, and on a
-# 4 GB box an operator must be able to keep the microphone and give up the
-# voice. Neither implies the other.
-#
-# Two engines share this port; scripts\tts-serve.ps1 -Engine picks one:
-#   piper      (default) small ONNX voices, faster than real time here
-#   omnivoice  the 613M diffusion model, only worth it on a GPU
-#
-# Setup and lifecycle:
-#   scripts\setup-tts.ps1        build the sidecar environment (one time)
-#   scripts\pull-tts-voice.ps1   download a Piper voice (~20-60 MB)
-#   scripts\pull-tts-model.ps1   download the OmniVoice model (~3 GB)
-#   scripts\tts-serve.ps1        start / -Stop / -Status
-#
-# On, because the CPU engine makes it usable. Measured here (i3-6006U, 2C/4T,
-# no CUDA): Piper -medium voices run at RTF ~0.2 -- about 1.4s to say a ~7s
-# sentence -- so the reply is shorter arriving than it is to listen to.
-# OmniVoice is this machine's ceiling, not its floor: it loads in 170.8s and
-# had not finished one 3-second sentence after 1,069s (RTF above 356), so it is
-# selectable but never a default. The integration is engine-agnostic on purpose
-# -- say() is one POST, and the markdown stripping, the doctor row and the
-# config keys do not care which server answers -- which is exactly what let a
-# CPU-sized engine be dropped in behind the same port.
-tts_enabled = true
-tts_base_url = "http://127.0.0.1:8182"
-
-# How Alan sounds. With OmniVoice this is voice design -- attributes in free
-# text, and empty lets the model pick. With Piper it is ignored: Piper has no
-# voice design, so a voice is chosen by name at start-up (TTS_VOICE, i.e.
-# scripts\tts-serve.ps1 -Voice en_US-ryan-medium). Empty is still the right
-# default here: naming an OmniVoice is a taste decision to make after you have
-# heard the untuned one.
-tts_instruct = ""
-
-# Seconds to wait for one synthesis. Generous because the first answer of a
-# session also pays for the model to load from disk. The sidecar caps input
-# at 1200 characters, so a runaway is bounded by input size as well as here.
-tts_timeout = 300.0
-
-# false synthesizes without playing -- a health check that exercises the whole
-# path on a machine with no speaker, without needing one to pass.
-tts_play = true
+# Voice (input via whisper-flow on 8181, output via a TTS sidecar on 8182) is
+# deliberately NOT configured here: this install is text-only. Removing the
+# [voice] section is the supported "off" state -- config.py only applies a
+# [voice] table when one is present, and VoiceSettings defaults both `enabled`
+# and `tts_enabled` to False. The sidecar environments and models are left on
+# disk; re-enabling is a matter of restoring this block.
 
 [scheduler]
 # Always-on background tasks (Phase 1).
@@ -438,7 +347,10 @@ provider = "groq"
 # Empty means "find vibecoder on PATH". A path set here is honoured EXCLUSIVELY:
 # a typo reports the tool as not installed rather than silently running some
 # other binary and reporting its results as if they came from this one.
-launcher = ""
+# Set explicitly here because Alan calls the launcher as a bare argv[0] with no
+# shell, so a .js bundle could not be resolved; this .cmd shim forwards to
+# C:\work\vibecoder\dist\vibecoder.js via node.
+launcher = "C:\\Users\\joshi\\AppData\\Roaming\\npm\\vibecoder.cmd"
 
 # Where work happens when a request names no directory. LEFT EMPTY on purpose.
 #
