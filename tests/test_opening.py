@@ -314,13 +314,48 @@ class InventedDomainTest(unittest.TestCase):
                 self.assertEqual(opening.resolve(target)["target"], expected)
 
     def test_a_single_word_still_guesses_a_site(self) -> None:
-        """The feature itself must survive the tightening."""
-        for target in ("youtube", "gmail"):
+        """The feature itself must survive the tightening.
+
+        Uses words with no known-site alias, so the bare-word guess is what
+        answers rather than the curated map (which has its own test below).
+        """
+        for target in ("exampleword", "somebrand"):
             with self.subTest(target=target):
                 found = opening.resolve(target)
                 self.assertEqual(found["target"], f"https://{target}.com")
                 self.assertTrue(found.get("assumed"),
                                 "a guess must always be reported as a guess")
+
+    def test_a_known_site_name_resolves_to_its_real_address(self) -> None:
+        """A spoken multi-word site name is opened, not reported missing.
+
+        "open yt music" cannot be guessed from spelling -- the bare-word rule
+        strips spaces into the bogus ``yt music.com`` -- so the curated map is
+        what makes it work. Every alias must resolve to a URL, never raise.
+        """
+        for spoken, expected in (("yt music", "https://music.youtube.com"),
+                                 ("YT  Music", "https://music.youtube.com"),
+                                 ("gmail", "https://mail.google.com"),
+                                 ("google drive", "https://drive.google.com"),
+                                 ("stack overflow", "https://stackoverflow.com")):
+            with self.subTest(spoken=spoken):
+                found = opening.resolve(spoken)
+                self.assertEqual(found["kind"], "url")
+                self.assertEqual(found["target"], expected)
+                self.assertTrue(found.get("assumed"),
+                                "a known-site open must be reported as an assumption")
+
+    def test_an_installed_program_beats_a_known_site_alias(self) -> None:
+        """The alias table is a fallback, never a hijack.
+
+        Aliases are consulted only after the OS lookups fail, so a real
+        application named like a site still opens as the application.
+        """
+        with mock.patch.object(opening, "_alias", return_value="https://x.com"), \
+             mock.patch.object(opening, "_app_paths", return_value=r"C:\x\real.exe"):
+            found = opening.resolve("some app")
+        self.assertEqual(found["kind"], "installed")
+        self.assertEqual(found["path"], r"C:\x\real.exe")
 
     def test_nothing_launches_for_a_refused_filename(self) -> None:
         with mock.patch.object(opening.os, "startfile") as startfile:

@@ -283,10 +283,14 @@ class StandardTools(ToolProvider):
             description=(
                 "Open a website or start an installed application on this "
                 "machine, so the user can see it. Accepts a bare name "
-                "('notepad'), a Start Menu name ('chrome'), a full path "
+                "('notepad'), a spoken site name ('yt music', 'gmail', "
+                "'github'), a Start Menu name ('chrome'), a full path "
                 "('C:\\\\Tools\\\\app.exe') or an address ('youtube.com'). "
-                "Use this when the user wants something opened; use web.open "
-                "only to read a page's text."
+                "When the user asks to open something, just open it: Alan "
+                "prefers an installed app, otherwise falls back to the "
+                "website in the browser. Do not ask the user which they meant "
+                "or reply with a menu of options -- call this tool. Use "
+                "web.open only to read a page's text, not to show it."
             ),
             input_schema={
                 "type": "object",

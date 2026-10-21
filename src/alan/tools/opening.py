@@ -89,6 +89,74 @@ _BUILTINS = {
     "sticky notes": "stickynotes.exe",
 }
 
+#: Multi-word names of well-known *websites* that spelling alone cannot turn into
+#: an address. "open youtube" works by the bare-word guess below, but "open yt
+#: music" cannot: the guess strips nothing, so the phrase would become the
+#: non-existent host ``yt music.com``. A person asking to open a site should get
+#: the site, not a menu of instructions -- so the names that are common enough to
+#: have a *known* destination are listed here, spelled the way people say them.
+#:
+#: This is deliberately not the "list of well-known sites" the guess below
+#: refuses. That refusal is about inventing a domain for any bare word (``youtube``
+#: -> ``youtube.com``) from spelling. Here the spelling gives nothing to work with
+#: -- there is no rule that turns "yt music" into ``music.youtube.com`` -- so the
+#: only honest options are a short, curated map or a failed request. Keep it small
+#: and only add a name whose destination is unambiguous.
+_SITE_ALIASES = {
+    "yt music": "https://music.youtube.com",
+    "youtube music": "https://music.youtube.com",
+    "yt": "https://youtube.com",
+    "youtube": "https://youtube.com",
+    "gmail": "https://mail.google.com",
+    "google mail": "https://mail.google.com",
+    "google drive": "https://drive.google.com",
+    "google maps": "https://maps.google.com",
+    "google docs": "https://docs.google.com",
+    "google calendar": "https://calendar.google.com",
+    "google photos": "https://photos.google.com",
+    "google scholar": "https://scholar.google.com",
+    "google translate": "https://translate.google.com",
+    "github": "https://github.com",
+    "github gist": "https://gist.github.com",
+    "stack overflow": "https://stackoverflow.com",
+    "stackoverflow": "https://stackoverflow.com",
+    "reddit": "https://reddit.com",
+    "twitter": "https://twitter.com",
+    "x": "https://x.com",
+    "facebook": "https://facebook.com",
+    "instagram": "https://instagram.com",
+    "whatsapp web": "https://web.whatsapp.com",
+    "linkedin": "https://linkedin.com",
+    "netflix": "https://netflix.com",
+    "spotify": "https://open.spotify.com",
+    "spotify web": "https://open.spotify.com",
+    "amazon": "https://amazon.com",
+    "wikipedia": "https://wikipedia.org",
+    "chatgpt": "https://chatgpt.com",
+    "openai": "https://openai.com",
+    "hugging face": "https://huggingface.co",
+    "huggingface": "https://huggingface.co",
+    "twitch": "https://twitch.tv",
+    "discord": "https://discord.com",
+    "telegram web": "https://web.telegram.org",
+    "gmail inbox": "https://mail.google.com",
+    "youtube studio": "https://studio.youtube.com",
+    "prime video": "https://primevideo.com",
+    "hotstar": "https://hotstar.com",
+    "flipkart": "https://flipkart.com",
+}
+
+
+def _alias(target: str) -> str | None:
+    """The known website for a spoken name, or ``None`` if there is none.
+
+    Matching is on the lowercased, whitespace-collapsed phrase: "YT Music",
+    "yt  music" and "yt music" are the same request.
+    """
+    key = " ".join((target or "").lower().split())
+    return _SITE_ALIASES.get(key)
+
+
 _SCHEME = re.compile(r"^([a-zA-Z][a-zA-Z0-9+.-]*)://")
 #: The only schemes Alan will hand to Windows or fetch over the network.
 #:
@@ -369,6 +437,27 @@ def resolve(raw: str) -> dict[str, Any]:
         if found:
             return {"kind": kind, "target": target, "path": found}
 
+    # No installed program answers to that name. For a *known* website that is the
+    # expected case ("open yt music" means a site, not a program), so open it --
+    # the alternative is the "could not find an application" menu a person should
+    # never see for a request this ordinary. Placed after the app search so a real
+    # installed application always wins, and before the bare-word guess so a
+    # multi-word name like "yt music" -- which the guess cannot handle, since it
+    # only strips spaces into a bogus ``yt music.com`` -- resolves to the site it
+    # actually names.
+    known_site = _alias(target)
+    if known_site:
+        return {
+            "kind": "url",
+            "target": known_site,
+            "path": None,
+            "assumed": True,
+            "note": (
+                f"{target!r} is a known website, opened as {known_site}. "
+                f"Give the full address to be explicit."
+            ),
+        }
+
     # Nothing installed answers to that name, and the caller used a single word
     # with no dot. "open youtube" is the ordinary way to ask for a website, and
     # failing it with "no such application" makes a working request look broken.
@@ -401,9 +490,11 @@ def resolve(raw: str) -> dict[str, Any]:
         }
 
     raise FileNotFoundError(
-        f"could not find an application called {target!r}. "
-        "Try its Start Menu name, give the full path to the .exe, or give a "
-        "full website address such as 'example.com'."
+        f"could not find an application called {target!r}, and it is not a known "
+        "website. If the user wants something opened on the web, do not ask them "
+        "how -- open the address for them with system.open, using the site's "
+        "domain (for example 'example.com'). Ask only when you cannot tell which "
+        "site they mean."
     )
 
 
