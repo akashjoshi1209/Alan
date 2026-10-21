@@ -744,7 +744,11 @@ class LocalMemory(MemoryProvider):
         if kind:
             sql += " AND kind = ?"
             params.append(kind)
-        sql += " ORDER BY ts_epoch DESC LIMIT ?"
+        # id DESC breaks ties: two items written in the same clock tick share a
+        # ts_epoch, and without the tiebreaker SQLite would return them in
+        # insertion order -- oldest first, which is the opposite of "newest
+        # first". items() already orders this way for the same reason.
+        sql += " ORDER BY ts_epoch DESC, id DESC LIMIT ?"
         params.append(limit)
         try:
             rows = self._conn().execute(sql, tuple(params)).fetchall()
